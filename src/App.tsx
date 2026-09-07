@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, TOKEN_KEY, type Me } from './lib/apiClient.ts';
 import Login from './components/Login.tsx';
 import Shell from './components/Shell.tsx';
-import Overview from './components/Overview.tsx';
+import Dashboard from './components/Dashboard.tsx';
 import TeamDetail from './components/TeamDetail.tsx';
 import PersonDetail from './components/PersonDetail.tsx';
 import FeedbackInbox from './components/FeedbackInbox.tsx';
@@ -39,9 +39,10 @@ export default function App() {
   return (
     <Shell me={me} view={view.name} onNavigate={name => setView({ name } as View)}>
       {view.name === 'overview' && (
-        <Overview
+        <Dashboard
           me={me}
           onOpenTeam={team => setView({ name: 'team', team })}
+          onOpenPerson={email => setView({ name: 'person', email })}
           onOpenFeedback={() => setView({ name: 'feedback' })}
         />
       )}

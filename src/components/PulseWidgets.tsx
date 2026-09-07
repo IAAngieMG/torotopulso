@@ -29,10 +29,24 @@ export function KpiGrid({ kpis }: { kpis: Kpis }) {
   );
 }
 
-export function WeeklyLineChart({ points }: { points: DailyPoint[] }) {
+const CHART_TITLES: Record<string, string> = {
+  realtime: 'Evolución de la semana',
+  week: 'Evolución de la semana',
+  lastWeek: 'Evolución de la semana pasada',
+  month: 'Evolución por semana (este mes)',
+  quarter: 'Evolución por semana (este trimestre)',
+  semester: 'Evolución por semana (este semestre)',
+  year: 'Evolución por semana (este año)',
+};
+
+export function chartTitleFor(range: string): string {
+  return CHART_TITLES[range] || 'Evolución';
+}
+
+export function WeeklyLineChart({ points, title = 'Evolución' }: { points: DailyPoint[]; title?: string }) {
   return (
     <div className="rounded-xl border border-toroto-border bg-white p-4">
-      <p className="font-display font-semibold text-sm mb-3">Evolución de la semana</p>
+      <p className="font-display font-semibold text-sm mb-3">{title}</p>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={points} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -86,10 +100,16 @@ export function RangeSignalControls({
   signal: string;
   onSignal: (v: any) => void;
 }) {
-  const ranges: Array<[string, string]> = [
+  const quickRanges: Array<[string, string]> = [
     ['realtime', 'En tiempo real'],
     ['week', 'Esta semana'],
+  ];
+  const moreRanges: Array<[string, string]> = [
+    ['lastWeek', 'Semana pasada'],
     ['month', 'Este mes'],
+    ['quarter', 'Este trimestre'],
+    ['semester', 'Este semestre'],
+    ['year', 'Este año'],
   ];
   const signals: Array<[string, string]> = [
     ['ALL', 'Todas las señales'],
@@ -100,18 +120,36 @@ export function RangeSignalControls({
   ];
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-        {ranges.map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => onRange(value)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-              range === value ? 'bg-white shadow-sm text-[#0b1c30]' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+          {quickRanges.map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => onRange(value)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                range === value ? 'bg-white shadow-sm text-[#0b1c30]' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={moreRanges.some(([v]) => v === range) ? range : ''}
+          onChange={e => onRange(e.target.value)}
+          className={`text-xs font-medium rounded-lg border px-2.5 py-1.5 bg-white ${
+            moreRanges.some(([v]) => v === range) ? 'border-toroto-primary text-toroto-primary' : 'border-toroto-border text-slate-500'
+          }`}
+        >
+          <option value="" disabled>
+            Otro rango…
+          </option>
+          {moreRanges.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="flex flex-wrap gap-1">
         {signals.map(([value, label]) => (

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { fetchTeamDetail, type Me, type RangeOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
-import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls } from './PulseWidgets.tsx';
+import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
 
 interface TeamDetailProps {
@@ -50,7 +50,7 @@ export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetai
           <>
             <KpiGrid kpis={data.kpis} />
             <div className="grid md:grid-cols-2 gap-4">
-              <WeeklyLineChart points={data.weeklySeries} />
+              <WeeklyLineChart points={data.weeklySeries} title={chartTitleFor(range)} />
               <EnergyDistributionCard dist={data.energyDistribution} />
             </div>
 

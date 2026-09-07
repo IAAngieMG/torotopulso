@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ResponseRecord } from './pulseData.ts';
-import { computeKpis, computeWeeklySeries, computeEnergyDistribution, inRange } from './scoring.ts';
+import { computeKpis, computeWeeklySeries, computeEnergyDistribution, inRange, rangeWindow } from './scoring.ts';
 
 function rec(partial: Partial<ResponseRecord>): ResponseRecord {
   return {
@@ -66,6 +66,46 @@ test('computeEnergyDistribution reparte por el choice de AL', () => {
 
 test('computeEnergyDistribution sin respuestas AL regresa null', () => {
   assert.equal(computeEnergyDistribution([rec({ qCode: 'BD' })]), null);
+});
+
+test('inRange "lastWeek" toma exactamente la semana anterior a "week", no la de "week" otra vez', () => {
+  // Hoy es domingo 6 de septiembre de 2026 -> esta semana es lunes 31 ago - domingo 6 sep;
+  // la semana pasada es lunes 24 ago - domingo 30 ago.
+  const now = new Date('2026-09-06T12:00:00');
+  const respuestaSemanaPasada = rec({ timestamp: '2026-08-28T10:00:00' });
+  const respuestaEstaSemana = rec({ timestamp: '2026-09-02T10:00:00' });
+  assert.equal(inRange(respuestaSemanaPasada, { range: 'lastWeek', now }), true);
+  assert.equal(inRange(respuestaSemanaPasada, { range: 'week', now }), false);
+  assert.equal(inRange(respuestaEstaSemana, { range: 'lastWeek', now }), false);
+  assert.equal(inRange(respuestaEstaSemana, { range: 'week', now }), true);
+});
+
+test('rangeWindow calcula trimestre, semestre y año calendario correctamente', () => {
+  const now = new Date('2026-08-15T00:00:00');
+  const q = rangeWindow('quarter', now);
+  assert.equal(q.start.toISOString().slice(0, 10), '2026-07-01');
+  assert.equal(q.end.toISOString().slice(0, 10), '2026-10-01');
+
+  const s = rangeWindow('semester', now);
+  assert.equal(s.start.toISOString().slice(0, 10), '2026-07-01');
+  assert.equal(s.end.toISOString().slice(0, 10), '2027-01-01');
+
+  const y = rangeWindow('year', now);
+  assert.equal(y.start.toISOString().slice(0, 10), '2026-01-01');
+  assert.equal(y.end.toISOString().slice(0, 10), '2027-01-01');
+});
+
+test('computeWeeklySeries con rango largo agrupa por semana en vez de por día', () => {
+  const now = new Date('2026-08-15T00:00:00');
+  const records = [
+    rec({ qCode: 'BD', rawScore: 4, timestamp: '2026-07-06T09:00:00' }), // dentro del trimestre
+    rec({ qCode: 'BD', rawScore: 2, timestamp: '2026-06-01T09:00:00' }), // fuera del trimestre
+  ];
+  const points = computeWeeklySeries(records, now, 'quarter');
+  assert.ok(points.length >= 1);
+  assert.ok(points.every(p => !p.day.includes('undefined')));
+  const totalBd = points.reduce((s, p) => s + (p.bd ?? 0), 0);
+  assert.equal(totalBd, 4, 'solo debe contar la respuesta dentro del trimestre');
 });
 
 test('inRange "realtime" solo incluye respuestas de hoy', () => {

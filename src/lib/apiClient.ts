@@ -1,3 +1,5 @@
+import type { RangeOption } from './scoring.ts';
+
 export const TOKEN_KEY = 'pulsoTorotoSession';
 
 const headers = () => ({
@@ -58,7 +60,23 @@ export interface Overview {
   kpis: Kpis;
   weeklySeries: DailyPoint[];
   energyDistribution: EnergyDistribution | null;
+  insight: string;
   questions: Questions;
+}
+
+export interface TeamSummary {
+  team: string;
+  leader: string;
+  kpis: Kpis;
+  trend: 'up' | 'down' | 'flat';
+}
+
+export interface PersonSummary {
+  fullName: string;
+  email: string;
+  team: string;
+  isLeader: boolean;
+  kpis: Kpis;
 }
 
 export interface TeamMember {
@@ -103,13 +121,21 @@ export interface FeedbackEntry {
   createdAt: string;
 }
 
-export type RangeOption = 'realtime' | 'week' | 'month';
+export type { RangeOption } from './scoring.ts';
 export type SignalOption = 'ALL' | 'BD' | 'AL' | 'BT' | 'VIERNES';
 
 export function fetchOverview(range: RangeOption, signal: SignalOption, team?: string) {
   const params = new URLSearchParams({ range, signal });
   if (team) params.set('team', team);
   return api(`/api/pulse/overview?${params}`) as Promise<Overview>;
+}
+
+export function fetchTeamsSummary(range: RangeOption) {
+  return api(`/api/pulse/teams-summary?range=${range}`) as Promise<{ teams: TeamSummary[] }>;
+}
+
+export function fetchPeople(range: RangeOption, onlyLeaders = false) {
+  return api(`/api/pulse/people?range=${range}&leaders=${onlyLeaders}`) as Promise<{ people: PersonSummary[] }>;
 }
 
 export function fetchTeamDetail(team: string, range: RangeOption) {

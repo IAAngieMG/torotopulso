@@ -3,8 +3,10 @@ import type { ResponseRecord } from './pulseData.ts';
 const DAY_MS = 86400000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+export type RangeOption = 'realtime' | 'week' | 'lastWeek' | 'month' | 'quarter' | 'semester' | 'year';
+
 export interface RangeFilter {
-  range: 'realtime' | 'week' | 'month';
+  range: RangeOption;
   now?: Date;
 }
 
@@ -16,19 +18,48 @@ function startOfWeek(d: Date): Date {
   return monday;
 }
 
+/** [start, end) window in local time for a given range option, anchored at `now`. */
+export function rangeWindow(range: RangeOption, now = new Date()): { start: Date; end: Date } {
+  switch (range) {
+    case 'realtime': {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { start, end: new Date(start.getTime() + DAY_MS) };
+    }
+    case 'week': {
+      const start = startOfWeek(now);
+      return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+    }
+    case 'lastWeek': {
+      const start = new Date(startOfWeek(now).getTime() - 7 * DAY_MS);
+      return { start, end: new Date(start.getTime() + 7 * DAY_MS) };
+    }
+    case 'month': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start, end: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+    }
+    case 'quarter': {
+      const q = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), q * 3, 1);
+      return { start, end: new Date(now.getFullYear(), q * 3 + 3, 1) };
+    }
+    case 'semester': {
+      const half = now.getMonth() < 6 ? 0 : 6;
+      const start = new Date(now.getFullYear(), half, 1);
+      return { start, end: new Date(now.getFullYear(), half + 6, 1) };
+    }
+    case 'year': {
+      const start = new Date(now.getFullYear(), 0, 1);
+      return { start, end: new Date(now.getFullYear() + 1, 0, 1) };
+    }
+  }
+}
+
 export function inRange(record: ResponseRecord, filter: RangeFilter): boolean {
   const now = filter.now ?? new Date();
   const ts = new Date(record.timestamp);
   if (Number.isNaN(ts.getTime())) return false;
-  if (filter.range === 'month') {
-    return ts.getFullYear() === now.getFullYear() && ts.getMonth() === now.getMonth();
-  }
-  const weekStart = startOfWeek(now);
-  if (filter.range === 'week') {
-    return ts >= weekStart && ts.getTime() < weekStart.getTime() + 7 * DAY_MS;
-  }
-  // realtime: today only
-  return ts.toDateString() === now.toDateString();
+  const { start, end } = rangeWindow(filter.range, now);
+  return ts >= start && ts < end;
 }
 
 function average(values: number[]): number | null {
@@ -90,20 +121,41 @@ export interface DailyPoint {
   bt: number | null;
 }
 
-/** Mon-Fri average BD/BT for the week containing `now`. */
-export function computeWeeklySeries(records: ResponseRecord[], now = new Date()): DailyPoint[] {
-  const weekStart = startOfWeek(now);
-  const points: DailyPoint[] = [];
-  for (let i = 0; i < 5; i++) {
-    const day = new Date(weekStart.getTime() + i * DAY_MS);
-    const dayRecords = records.filter(r => new Date(r.timestamp).toDateString() === day.toDateString());
-    points.push({
-      day: DIAS[day.getDay()],
-      bd: average(scores(dayRecords, 'BD')),
-      bt: average(scores(dayRecords, 'BT')),
-    });
+/**
+ * Serie diaria Lunes-Viernes. Para 'week'/'lastWeek' son 5 puntos (esa semana exacta); para
+ * rangos más largos (mes, trimestre, semestre, año) se agrupa por semana en vez de por día,
+ * porque graficar cada día individual de un año sería ilegible.
+ */
+export function computeWeeklySeries(records: ResponseRecord[], now = new Date(), range: RangeOption = 'week'): DailyPoint[] {
+  if (range === 'week' || range === 'lastWeek' || range === 'realtime') {
+    const anchor = range === 'lastWeek' ? new Date(now.getTime() - 7 * DAY_MS) : now;
+    const weekStart = startOfWeek(anchor);
+    const points: DailyPoint[] = [];
+    for (let i = 0; i < 5; i++) {
+      const day = new Date(weekStart.getTime() + i * DAY_MS);
+      const dayRecords = records.filter(r => new Date(r.timestamp).toDateString() === day.toDateString());
+      points.push({ day: DIAS[day.getDay()], bd: average(scores(dayRecords, 'BD')), bt: average(scores(dayRecords, 'BT')) });
+    }
+    return points;
   }
-  return points;
+
+  // Agrupar por semana ISO-ish (lunes de esa semana) dentro de la ventana del rango.
+  const { start, end } = rangeWindow(range, now);
+  const buckets = new Map<number, ResponseRecord[]>();
+  for (const r of records) {
+    const ts = new Date(r.timestamp);
+    if (Number.isNaN(ts.getTime()) || ts < start || ts >= end) continue;
+    const key = startOfWeek(ts).getTime();
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(r);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([weekStartMs, weekRecords]) => ({
+      day: new Date(weekStartMs).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }),
+      bd: average(scores(weekRecords, 'BD')),
+      bt: average(scores(weekRecords, 'BT')),
+    }));
 }
 
 /**
@@ -114,6 +166,38 @@ export interface EnergyDistribution {
   altaEnergiaPct: number;
   enfoquePct: number;
   pausaPct: number;
+}
+
+/**
+ * Resumen automático estilo "Pulso IA" del mockup, pero calculado con reglas simples sobre
+ * los números ya obtenidos (no una llamada a un LLM) — evita el costo/latencia de una API de
+ * IA para un texto que de todas formas viene de datos determinísticos.
+ */
+export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string): string {
+  const withBd = weeklySeries.filter(p => p.bd !== null);
+  const withBt = weeklySeries.filter(p => p.bt !== null);
+  const bestBd = withBd.length ? withBd.reduce((a, b) => ((b.bd ?? 0) > (a.bd ?? 0) ? b : a)) : null;
+  const worstBt = withBt.length ? withBt.reduce((a, b) => ((b.bt ?? 5) < (a.bt ?? 5) ? b : a)) : null;
+
+  const lines: string[] = [];
+  if (kpis.bdAverage === null && kpis.btAverage === null) {
+    return `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`;
+  }
+  if (kpis.bdAverage !== null) lines.push(`El inicio del día promedió ${kpis.bdAverage.toFixed(1)}/5 en ${scopeLabel}.`);
+  if (kpis.btAverage !== null) lines.push(`El cierre del día promedió ${kpis.btAverage.toFixed(1)}/5.`);
+  if (bestBd) lines.push(`${bestBd.day} fue el día con mejor arranque (${bestBd.bd?.toFixed(1)}/5).`);
+  if (worstBt && (worstBt.bt ?? 5) < 3.5) lines.push(`${worstBt.day} tuvo el cierre más bajo (${worstBt.bt?.toFixed(1)}/5) — vale la pena revisar qué pasó ese día.`);
+  if (kpis.participationPct !== null) {
+    lines.push(
+      kpis.participationPct >= 90
+        ? `Participación alta: ${kpis.participationPct}% (${kpis.participationDetail}).`
+        : `Participación de ${kpis.participationPct}% (${kpis.participationDetail}) — hay margen para subirla.`,
+    );
+  }
+  if (kpis.onTimePct !== null && kpis.onTimePct < 70) {
+    lines.push(`Solo ${kpis.onTimePct}% de las respuestas llegaron a tiempo, por debajo de lo ideal.`);
+  }
+  return lines.join(' ');
 }
 
 export function computeEnergyDistribution(records: ResponseRecord[]): EnergyDistribution | null {

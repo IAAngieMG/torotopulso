@@ -21,7 +21,14 @@ import {
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
 import { resolveAccess, FEEDBACK_INBOX_EMAILS, type AccessResult } from './src/lib/permissions.ts';
-import { computeKpis, computeWeeklySeries, computeEnergyDistribution, inRange, type RangeFilter } from './src/lib/scoring.ts';
+import {
+  computeKpis,
+  computeWeeklySeries,
+  computeEnergyDistribution,
+  buildAutoInsight,
+  inRange,
+  type RangeFilter,
+} from './src/lib/scoring.ts';
 import { buildEmailToTeams } from './src/lib/teamLookup.ts';
 
 const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
@@ -249,12 +256,15 @@ export async function createApp() {
       records = signal === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === signal);
     }
 
+    const kpis = computeKpis(records, rosterEmails.size);
+    const weeklySeries = computeWeeklySeries(records, new Date(), range);
     res.json({
       teams: teamsInScope,
       availableTeams: myTeams,
-      kpis: computeKpis(records, rosterEmails.size),
-      weeklySeries: computeWeeklySeries(records),
+      kpis,
+      weeklySeries,
       energyDistribution: computeEnergyDistribution(records),
+      insight: buildAutoInsight(kpis, weeklySeries, requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos')),
       questions: {
         BD: currentQuestionFor(data.preguntas, 'BD'),
         AL: currentQuestionFor(data.preguntas, 'AL'),
@@ -262,6 +272,59 @@ export async function createApp() {
         VIERNES: currentQuestionFor(data.preguntas, 'VIERNES'),
       },
     });
+  });
+
+  app.get('/api/pulse/teams-summary', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const myTeams = scopedTeamNames(access, data.teams);
+    const summary = myTeams.map(teamName => {
+      const team = data.teams.find(t => t.name === teamName)!;
+      const rosterEmails = new Set<string>();
+      for (const [email, teams] of data.emailToTeams) if (teams.includes(teamName)) rosterEmails.add(email);
+      const records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
+      const previous = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range: range === 'week' ? 'lastWeek' : range }));
+      const kpis = computeKpis(records, rosterEmails.size);
+      const previousKpis = range === 'week' ? computeKpis(previous, rosterEmails.size) : null;
+      const trend =
+        previousKpis?.bdAverage != null && kpis.bdAverage != null
+          ? kpis.bdAverage > previousKpis.bdAverage
+            ? 'up'
+            : kpis.bdAverage < previousKpis.bdAverage
+              ? 'down'
+              : 'flat'
+          : 'flat';
+      return { team: team.name, leader: team.leaderName, kpis, trend };
+    });
+    res.json({ teams: summary });
+  });
+
+  app.get('/api/pulse/people', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const myTeams = scopedTeamNames(access, data.teams);
+    const onlyLeaders = clean(req.query.leaders as string) === 'true';
+
+    const people: Array<{ fullName: string; email: string; team: string; isLeader: boolean; kpis: ReturnType<typeof computeKpis> }> = [];
+    for (const team of data.teams) {
+      if (!myTeams.includes(team.name)) continue;
+      const roster = onlyLeaders ? [team.leaderName] : [team.leaderName, ...team.members];
+      for (const fullName of roster) {
+        const email = data.slackByName.get(fullName);
+        if (!email) continue;
+        const records = data.responses.filter(r => r.email === email && inRange(r, { range }));
+        people.push({ fullName, email, team: team.name, isLeader: fullName === team.leaderName, kpis: computeKpis(records, 1) });
+      }
+    }
+    res.json({ people });
   });
 
   app.get('/api/pulse/team/:team', async (req, res) => {
@@ -300,7 +363,7 @@ export async function createApp() {
       team: team.name,
       leader: team.leaderName,
       kpis: computeKpis(records, rosterEmails.size),
-      weeklySeries: computeWeeklySeries(records),
+      weeklySeries: computeWeeklySeries(records, new Date(), range),
       energyDistribution: computeEnergyDistribution(records),
       members,
     });
