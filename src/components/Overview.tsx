@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ChevronRight, Sparkles } from 'lucide-react';
-import { fetchOverview, type Me, type Overview as OverviewData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
+import { useEffect, useState, Fragment } from 'react';
+import { ChevronRight, Sparkles, Lightbulb } from 'lucide-react';
+import { fetchOverview, type AutoInsight, type Me, type Overview as OverviewData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, QuestionBanner, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 
 const SIGNAL_QUESTION_KEY: Record<SignalOption, keyof OverviewData['questions'] | null> = {
@@ -11,18 +11,51 @@ const SIGNAL_QUESTION_KEY: Record<SignalOption, keyof OverviewData['questions'] 
   VIERNES: 'VIERNES',
 };
 
-function AiInsightCard({ text }: { text: string }) {
-  if (!text) return null;
+/** Renders `**texto**` como negritas, sin traer una librería de markdown para esto. */
+function Bold({ text }: { text: string }) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
   return (
-    <div className="rounded-xl border border-toroto-border bg-white p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles size={15} className="text-toroto-primary" />
-        <p className="font-display font-semibold text-sm">Pulso IA</p>
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? <strong key={i} className="font-semibold text-[#0b1c30]">{part}</strong> : <Fragment key={i}>{part}</Fragment>,
+      )}
+    </>
+  );
+}
+
+function AiInsightCard({ insight }: { insight: AutoInsight }) {
+  if (!insight.headline) return null;
+  return (
+    <div className="rounded-xl border border-toroto-primary/25 bg-gradient-to-br from-toroto-primary-light to-white p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-full bg-toroto-primary text-white flex items-center justify-center shrink-0">
+          <Sparkles size={15} />
+        </div>
+        <p className="font-display font-semibold text-base text-[#0b1c30]">Pulso IA</p>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-toroto-primary bg-white border border-toroto-primary/30 rounded-full px-2 py-0.5">
           Automático
         </span>
       </div>
-      <p className="text-sm text-[#0b1c30]">{text}</p>
+      <p className="text-sm font-medium text-[#0b1c30] mb-3">{insight.headline}</p>
+      {insight.bullets.length > 0 && (
+        <ul className="space-y-1.5 mb-3">
+          {insight.bullets.map((b, i) => (
+            <li key={i} className="text-sm text-slate-600 flex gap-2">
+              <span className="text-toroto-primary mt-0.5">•</span>
+              <span><Bold text={b} /></span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {insight.recommendation && (
+        <div className="flex items-start gap-2 rounded-lg bg-white border border-toroto-border p-3 mt-2">
+          <Lightbulb size={15} className="text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Sugerencia de acción</p>
+            <p className="text-sm text-[#0b1c30]">{insight.recommendation}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -85,11 +118,13 @@ export default function Overview({ me, onOpenTeam }: { me: Me; onOpenTeam: (team
         <>
           {questionKey && <QuestionBanner text={data.questions[questionKey]} />}
           <KpiGrid kpis={data.kpis} />
-          <div className="grid md:grid-cols-2 gap-4">
-            <WeeklyLineChart points={data.weeklySeries} title={chartTitleFor(range)} />
-            <EnergyDistributionCard dist={data.energyDistribution} />
+          <div className="grid lg:grid-cols-3 gap-4 items-start">
+            <div className="lg:col-span-2 space-y-4">
+              <WeeklyLineChart points={data.weeklySeries} title={chartTitleFor(range)} />
+              <EnergyDistributionCard dist={data.energyDistribution} />
+            </div>
+            <AiInsightCard insight={data.insight} />
           </div>
-          <AiInsightCard text={data.insight} />
 
           <div className="rounded-xl border border-toroto-border bg-white p-4">
             <p className="font-display font-semibold text-sm mb-3">Equipos {activeTeam ? 'relacionados' : 'en tu alcance'}</p>

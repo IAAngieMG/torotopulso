@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { fetchPeople, type PersonSummary, type RangeOption } from '../lib/apiClient.ts';
+import { fetchPeople, type PersonSummary, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { RangeSignalControls } from './PulseWidgets.tsx';
 
 export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders: boolean; onOpenPerson: (email: string) => void }) {
   const [range, setRange] = useState<RangeOption>('week');
+  const [signal, setSignal] = useState<SignalOption>('ALL');
   const [query, setQuery] = useState('');
   const [people, setPeople] = useState<PersonSummary[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    fetchPeople(range, onlyLeaders)
+    fetchPeople(range, onlyLeaders, signal)
       .then(d => !cancelled && setPeople(d.people))
       .catch(e => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
-  }, [range, onlyLeaders]);
+  }, [range, onlyLeaders, signal]);
 
   const filtered = people?.filter(p => p.fullName.toLowerCase().includes(query.toLowerCase()) || p.team.toLowerCase().includes(query.toLowerCase()));
 
@@ -30,7 +31,7 @@ export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders:
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <RangeSignalControls range={range} onRange={setRange} signal="ALL" onSignal={() => {}} />
+        <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}

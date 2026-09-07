@@ -168,36 +168,53 @@ export interface EnergyDistribution {
   pausaPct: number;
 }
 
+export interface AutoInsight {
+  headline: string;
+  bullets: string[];
+  recommendation: string | null;
+}
+
 /**
  * Resumen automático estilo "Pulso IA" del mockup, pero calculado con reglas simples sobre
  * los números ya obtenidos (no una llamada a un LLM) — evita el costo/latencia de una API de
  * IA para un texto que de todas formas viene de datos determinísticos.
  */
-export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string): string {
+export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string): AutoInsight {
+  if (kpis.bdAverage === null && kpis.btAverage === null) {
+    return { headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`, bullets: [], recommendation: null };
+  }
+
   const withBd = weeklySeries.filter(p => p.bd !== null);
   const withBt = weeklySeries.filter(p => p.bt !== null);
   const bestBd = withBd.length ? withBd.reduce((a, b) => ((b.bd ?? 0) > (a.bd ?? 0) ? b : a)) : null;
   const worstBt = withBt.length ? withBt.reduce((a, b) => ((b.bt ?? 5) < (a.bt ?? 5) ? b : a)) : null;
 
-  const lines: string[] = [];
-  if (kpis.bdAverage === null && kpis.btAverage === null) {
-    return `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`;
-  }
-  if (kpis.bdAverage !== null) lines.push(`El inicio del día promedió ${kpis.bdAverage.toFixed(1)}/5 en ${scopeLabel}.`);
-  if (kpis.btAverage !== null) lines.push(`El cierre del día promedió ${kpis.btAverage.toFixed(1)}/5.`);
-  if (bestBd) lines.push(`${bestBd.day} fue el día con mejor arranque (${bestBd.bd?.toFixed(1)}/5).`);
-  if (worstBt && (worstBt.bt ?? 5) < 3.5) lines.push(`${worstBt.day} tuvo el cierre más bajo (${worstBt.bt?.toFixed(1)}/5) — vale la pena revisar qué pasó ese día.`);
+  const climate = kpis.bdAverage != null && kpis.bdAverage >= 4 ? 'estable y positivo' : kpis.bdAverage != null && kpis.bdAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
+  const capitalizedScope = scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1);
+  const headline = `${capitalizedScope} se mantiene ${climate} en este rango.`;
+
+  const bullets: string[] = [];
+  if (kpis.bdAverage !== null) bullets.push(`El inicio del día promedió **${kpis.bdAverage.toFixed(1)}/5**.`);
+  if (kpis.btAverage !== null) bullets.push(`El cierre del día promedió **${kpis.btAverage.toFixed(1)}/5**.`);
+  if (bestBd) bullets.push(`**${bestBd.day}** fue el día con mejor arranque (${bestBd.bd?.toFixed(1)}/5).`);
   if (kpis.participationPct !== null) {
-    lines.push(
+    bullets.push(
       kpis.participationPct >= 90
-        ? `Participación alta: ${kpis.participationPct}% (${kpis.participationDetail}).`
-        : `Participación de ${kpis.participationPct}% (${kpis.participationDetail}) — hay margen para subirla.`,
+        ? `Participación alta: **${kpis.participationPct}%** (${kpis.participationDetail}).`
+        : `Participación de **${kpis.participationPct}%** (${kpis.participationDetail}).`,
     );
   }
-  if (kpis.onTimePct !== null && kpis.onTimePct < 70) {
-    lines.push(`Solo ${kpis.onTimePct}% de las respuestas llegaron a tiempo, por debajo de lo ideal.`);
+
+  let recommendation: string | null = null;
+  if (worstBt && (worstBt.bt ?? 5) < 3.5) {
+    recommendation = `Revisar qué ocurrió el ${worstBt.day.toLowerCase()}, cuando el cierre bajó a ${worstBt.bt?.toFixed(1)}/5.`;
+  } else if (kpis.onTimePct !== null && kpis.onTimePct < 70) {
+    recommendation = `Solo ${kpis.onTimePct}% de las respuestas llegaron a tiempo — vale la pena recordar el horario en el standup.`;
+  } else if (kpis.participationPct !== null && kpis.participationPct < 80) {
+    recommendation = `La participación de ${kpis.participationPct}% tiene margen para subir — vale la pena dar seguimiento con quienes no han respondido.`;
   }
-  return lines.join(' ');
+
+  return { headline, bullets, recommendation };
 }
 
 export function computeEnergyDistribution(records: ResponseRecord[]): EnergyDistribution | null {

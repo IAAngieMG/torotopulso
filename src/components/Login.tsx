@@ -85,7 +85,7 @@ export default function Login({ initialError }: { initialError?: string }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <div className="md:w-1/2 bg-gradient-to-br from-toroto-primary to-toroto-primary-dark text-white flex flex-col justify-between p-8 md:p-16">
-        <img src="/toroto-logo-white.png" alt="Toroto" width={69} height={32} className="h-8 w-auto" />
+        <img src="/toroto-logo-white.png" alt="Toroto" width={69} height={32} className="h-8 w-auto self-start" />
         <div>
           <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold tracking-wide uppercase mb-6">
             ★ Pulso de la tropa

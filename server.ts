@@ -90,6 +90,12 @@ async function loadPulseData(): Promise<PulseData> {
   return inflight;
 }
 
+function applySignalFilter(records: ResponseRecord[], signal: string): ResponseRecord[] {
+  const upper = signal.toUpperCase();
+  if (!upper || upper === 'ALL') return records;
+  return upper === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === upper);
+}
+
 function accessFor(data: PulseData, email: string): AccessResult {
   return resolveAccess(email, data.slackByEmail, data.teams, data.subTeams, data.filtroEspecial);
 }
@@ -331,10 +337,7 @@ export async function createApp() {
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string).toUpperCase() || 'ALL';
 
-    let records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
-    if (signal !== 'ALL') {
-      records = signal === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === signal);
-    }
+    const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
 
     const kpis = computeKpis(records, rosterEmails.size);
     const weeklySeries = computeWeeklySeries(records, new Date(), range);
@@ -361,13 +364,17 @@ export async function createApp() {
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const signal = clean(req.query.signal as string) || 'ALL';
     const myTeams = scopedTeamNames(access, data.teams);
     const summary = myTeams.map(teamName => {
       const team = data.teams.find(t => t.name === teamName)!;
       const rosterEmails = new Set<string>();
       for (const [email, teams] of data.emailToTeams) if (teams.includes(teamName)) rosterEmails.add(email);
-      const records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
-      const previous = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range: range === 'week' ? 'lastWeek' : range }));
+      const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
+      const previous = applySignalFilter(
+        data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range: range === 'week' ? 'lastWeek' : range })),
+        signal,
+      );
       const kpis = computeKpis(records, rosterEmails.size);
       const previousKpis = range === 'week' ? computeKpis(previous, rosterEmails.size) : null;
       const trend =
@@ -390,6 +397,7 @@ export async function createApp() {
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const signal = clean(req.query.signal as string) || 'ALL';
     const myTeams = scopedTeamNames(access, data.teams);
     const onlyLeaders = clean(req.query.leaders as string) === 'true';
 
@@ -400,7 +408,7 @@ export async function createApp() {
       for (const fullName of roster) {
         const email = data.slackByName.get(fullName);
         if (!email) continue;
-        const records = data.responses.filter(r => r.email === email && inRange(r, { range }));
+        const records = applySignalFilter(data.responses.filter(r => r.email === email && inRange(r, { range })), signal);
         people.push({ fullName, email, team: team.name, isLeader: fullName === team.leaderName, kpis: computeKpis(records, 1) });
       }
     }
@@ -437,7 +445,8 @@ export async function createApp() {
 
     const rosterEmails = new Set(members.map(m => m.email));
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
-    const records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
+    const signal = clean(req.query.signal as string) || 'ALL';
+    const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
 
     res.json({
       team: team.name,
@@ -464,9 +473,11 @@ export async function createApp() {
     }
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
-    const records = data.responses
-      .filter(r => r.email === targetEmail && inRange(r, { range }))
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const signal = clean(req.query.signal as string) || 'ALL';
+    const records = applySignalFilter(
+      data.responses.filter(r => r.email === targetEmail && inRange(r, { range })),
+      signal,
+    ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     res.json({
       email: targetEmail,
@@ -478,21 +489,25 @@ export async function createApp() {
   });
 
   app.post('/api/feedback', async (req, res) => {
-    const session = (req as any).session as SignedSession;
-    const message = clean(req.body?.message, 2000);
-    const view = clean(req.body?.view, 200);
-    if (!message) return res.status(400).json({ error: 'Escribe un mensaje antes de enviar.' });
-    const entries = await loadFeedback();
-    entries.push({
-      id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      message,
-      authorName: session.name,
-      authorEmail: session.email,
-      view,
-      createdAt: new Date().toISOString(),
-    });
-    await saveFeedback(entries);
-    res.status(201).json({ ok: true });
+    try {
+      const session = (req as any).session as SignedSession;
+      const message = clean(req.body?.message, 2000);
+      const view = clean(req.body?.view, 200);
+      if (!message) return res.status(400).json({ error: 'Escribe un mensaje antes de enviar.' });
+      const entries = await loadFeedback();
+      entries.push({
+        id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        message,
+        authorName: session.name,
+        authorEmail: session.email,
+        view,
+        createdAt: new Date().toISOString(),
+      });
+      await saveFeedback(entries);
+      res.status(201).json({ ok: true });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible guardar el feedback.' });
+    }
   });
 
   app.get('/api/feedback', async (req, res) => {
@@ -500,8 +515,12 @@ export async function createApp() {
     if (!FEEDBACK_INBOX_EMAILS.includes(session.email)) {
       return res.status(403).json({ error: 'No tienes acceso al buzón de feedback.' });
     }
-    const entries = await loadFeedback();
-    res.json({ entries: entries.reverse() });
+    try {
+      const entries = await loadFeedback();
+      res.json({ entries: entries.reverse() });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible cargar el feedback.' });
+    }
   });
 
   function requireRecognitionManager(req: Request, res: Response, next: NextFunction) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, Minus, ChevronRight } from 'lucide-react';
-import { fetchTeamsSummary, type RangeOption, type TeamSummary } from '../lib/apiClient.ts';
+import { fetchTeamsSummary, type RangeOption, type SignalOption, type TeamSummary } from '../lib/apiClient.ts';
 import { RangeSignalControls } from './PulseWidgets.tsx';
 
 const TREND_ICON = { up: ArrowUp, down: ArrowDown, flat: Minus } as const;
@@ -8,18 +8,19 @@ const TREND_COLOR = { up: 'text-emerald-600', down: 'text-red-500', flat: 'text-
 
 export default function TeamsTable({ onOpenTeam }: { onOpenTeam: (team: string) => void }) {
   const [range, setRange] = useState<RangeOption>('week');
+  const [signal, setSignal] = useState<SignalOption>('ALL');
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    fetchTeamsSummary(range)
+    fetchTeamsSummary(range, signal)
       .then(d => !cancelled && setTeams(d.teams))
       .catch(e => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [range, signal]);
 
   return (
     <div className="space-y-4">
@@ -27,7 +28,7 @@ export default function TeamsTable({ onOpenTeam }: { onOpenTeam: (team: string) 
         <h2 className="font-display text-lg font-semibold">Pulso por equipos</h2>
         <p className="text-sm text-slate-500">Una mirada rápida a cómo está viviendo el rango cada equipo.</p>
       </div>
-      <RangeSignalControls range={range} onRange={setRange} signal="ALL" onSignal={() => {}} />
+      <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!teams && !error && <p className="text-sm text-slate-500">Cargando…</p>}
       {teams && (

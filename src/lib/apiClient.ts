@@ -55,13 +55,19 @@ export interface Questions {
   VIERNES: string;
 }
 
+export interface AutoInsight {
+  headline: string;
+  bullets: string[];
+  recommendation: string | null;
+}
+
 export interface Overview {
   teams: string[];
   availableTeams: string[];
   kpis: Kpis;
   weeklySeries: DailyPoint[];
   energyDistribution: EnergyDistribution | null;
-  insight: string;
+  insight: AutoInsight;
   questions: Questions;
 }
 
@@ -131,20 +137,20 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
   return api(`/api/pulse/overview?${params}`) as Promise<Overview>;
 }
 
-export function fetchTeamsSummary(range: RangeOption) {
-  return api(`/api/pulse/teams-summary?range=${range}`) as Promise<{ teams: TeamSummary[] }>;
+export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {
+  return api(`/api/pulse/teams-summary?range=${range}&signal=${signal}`) as Promise<{ teams: TeamSummary[] }>;
 }
 
-export function fetchPeople(range: RangeOption, onlyLeaders = false) {
-  return api(`/api/pulse/people?range=${range}&leaders=${onlyLeaders}`) as Promise<{ people: PersonSummary[] }>;
+export function fetchPeople(range: RangeOption, onlyLeaders = false, signal: SignalOption = 'ALL') {
+  return api(`/api/pulse/people?range=${range}&leaders=${onlyLeaders}&signal=${signal}`) as Promise<{ people: PersonSummary[] }>;
 }
 
-export function fetchTeamDetail(team: string, range: RangeOption) {
-  return api(`/api/pulse/team/${encodeURIComponent(team)}?range=${range}`) as Promise<TeamDetail>;
+export function fetchTeamDetail(team: string, range: RangeOption, signal: SignalOption = 'ALL') {
+  return api(`/api/pulse/team/${encodeURIComponent(team)}?range=${range}&signal=${signal}`) as Promise<TeamDetail>;
 }
 
-export function fetchPersonDetail(email: string, range: RangeOption) {
-  return api(`/api/pulse/person/${encodeURIComponent(email)}?range=${range}`) as Promise<PersonDetail>;
+export function fetchPersonDetail(email: string, range: RangeOption, signal: SignalOption = 'ALL') {
+  return api(`/api/pulse/person/${encodeURIComponent(email)}?range=${range}&signal=${signal}`) as Promise<PersonDetail>;
 }
 
 export function sendFeedback(message: string, view: string) {

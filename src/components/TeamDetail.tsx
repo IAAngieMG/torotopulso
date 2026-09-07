@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { fetchTeamDetail, type Me, type RangeOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
+import { fetchTeamDetail, type Me, type RangeOption, type SignalOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
@@ -14,19 +14,20 @@ interface TeamDetailProps {
 
 export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetailProps) {
   const [range, setRange] = useState<RangeOption>('week');
+  const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<TeamDetailData | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
-    fetchTeamDetail(team, range)
+    fetchTeamDetail(team, range, signal)
       .then(d => !cancelled && setData(d))
       .catch(e => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
-  }, [team, range]);
+  }, [team, range, signal]);
 
   return (
     <div>
@@ -41,7 +42,7 @@ export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetai
           {data && <p className="text-sm text-slate-500">Líder: {data.leader}</p>}
         </div>
 
-        <RangeSignalControls range={range} onRange={setRange} signal="ALL" onSignal={() => {}} />
+        <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}

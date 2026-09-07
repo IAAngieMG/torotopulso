@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { fetchPersonDetail, type Me, type PersonDetail as PersonDetailData, type RangeOption } from '../lib/apiClient.ts';
+import { fetchPersonDetail, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, RangeSignalControls } from './PulseWidgets.tsx';
 
@@ -8,19 +8,20 @@ const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimen
 
 export default function PersonDetail({ me, email, onBack }: { me: Me; email: string; onBack: () => void }) {
   const [range, setRange] = useState<RangeOption>('week');
+  const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<PersonDetailData | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
-    fetchPersonDetail(email, range)
+    fetchPersonDetail(email, range, signal)
       .then(d => !cancelled && setData(d))
       .catch(e => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
-  }, [email, range]);
+  }, [email, range, signal]);
 
   return (
     <div>
@@ -35,7 +36,7 @@ export default function PersonDetail({ me, email, onBack }: { me: Me; email: str
           <p className="text-sm text-slate-500">{email}{data?.teams.length ? ` · ${data.teams.join(', ')}` : ''}</p>
         </div>
 
-        <RangeSignalControls range={range} onRange={setRange} signal="ALL" onSignal={() => {}} />
+        <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}
