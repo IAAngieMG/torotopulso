@@ -84,18 +84,30 @@ export function TopBar({ name, extra }: { name: string; extra?: ReactNode }) {
   );
 }
 
-export function ReconocimientosPlaceholder({ onOpenFeedback, canSeeFeedback }: { onOpenFeedback: () => void; canSeeFeedback: boolean }) {
+export function ReconocimientosCard({
+  onOpenRecognitions,
+  onOpenFeedback,
+  canSeeFeedback,
+  isManager,
+}: {
+  onOpenRecognitions: () => void;
+  onOpenFeedback: () => void;
+  canSeeFeedback: boolean;
+  isManager: boolean;
+}) {
   return (
     <div className="rounded-xl border border-toroto-border bg-white p-4 flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
+      <button onClick={onOpenRecognitions} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
+        <div className="w-9 h-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
           <Award size={16} className="text-amber-600" />
         </div>
         <div>
           <p className="font-display font-semibold text-sm">Reconocimientos del mes</p>
-          <p className="text-xs text-slate-500">Aún no conectado a Slack — próximamente.</p>
+          <p className="text-xs text-slate-500">
+            {isManager ? 'Revisa y publica los diplomas del mes.' : 'Ver a quién reconocimos este mes.'}
+          </p>
         </div>
-      </div>
+      </button>
       {canSeeFeedback && (
         <button
           onClick={onOpenFeedback}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Globe2, Users, User, Star } from 'lucide-react';
 import type { Me } from '../lib/apiClient.ts';
-import { TopBar, ReconocimientosPlaceholder } from './Shell.tsx';
+import { TopBar, ReconocimientosCard } from './Shell.tsx';
 import Overview from './Overview.tsx';
 import TeamsTable from './TeamsTable.tsx';
 import PeopleList from './PeopleList.tsx';
@@ -21,9 +21,10 @@ interface DashboardProps {
   onOpenTeam: (team: string) => void;
   onOpenPerson: (email: string) => void;
   onOpenFeedback: () => void;
+  onOpenRecognitions: () => void;
 }
 
-export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback }: DashboardProps) {
+export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback, onOpenRecognitions }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('general');
   const isEjecutivo = me.role === 'ejecutivo';
 
@@ -31,7 +32,14 @@ export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback
     <div>
       <TopBar name={me.name} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
-        {me.canSeeFeedback && <ReconocimientosPlaceholder onOpenFeedback={onOpenFeedback} canSeeFeedback />}
+        {isEjecutivo && (
+          <ReconocimientosCard
+            onOpenRecognitions={onOpenRecognitions}
+            onOpenFeedback={onOpenFeedback}
+            canSeeFeedback={me.canSeeFeedback}
+            isManager={me.canManageRecognitions}
+          />
+        )}
 
         {isEjecutivo && (
           <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">

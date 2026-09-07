@@ -11,7 +11,7 @@ const SHEET_NAMES = {
 
 export type SheetKey = keyof typeof SHEET_NAMES;
 
-async function fetchSheetRows(sheetId: string, sheetName: string): Promise<string[][]> {
+export async function fetchSheetRows(sheetId: string, sheetName: string): Promise<string[][]> {
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const res = await fetch(url);
   if (!res.ok) {

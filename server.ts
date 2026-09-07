@@ -4,8 +4,10 @@ import path from 'node:path';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { getStore } from '@netlify/blobs';
+import { GoogleGenAI } from '@google/genai';
 import { signSession, verifySession, type SignedSession } from './src/lib/sessionToken.ts';
-import { fetchAllSheets } from './src/lib/sheets.ts';
+import { fetchAllSheets, fetchSheetRows } from './src/lib/sheets.ts';
+import { parseNominations, type Nomination } from './src/lib/recognitionData.ts';
 import {
   parseGrupos,
   parseGruposDetalle,
@@ -37,6 +39,8 @@ const googleClientId = clean(process.env.GOOGLE_CLIENT_ID, 300).replace(/^['"]|[
 const googleClientIdValid = /^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(googleClientId);
 const sessionSecret = clean(process.env.SESSION_SECRET, 500);
 const SHEET_ID = clean(process.env.SHEET_ID, 200);
+const RECOGNITION_SHEET_ID = clean(process.env.RECOGNITION_SHEET_ID, 200);
+const GEMINI_API_KEY = clean(process.env.GEMINI_API_KEY, 500);
 
 function createSessionToken(session: SignedSession) {
   return signSession(session, sessionSecret);
@@ -135,6 +139,81 @@ async function saveFeedback(entries: FeedbackEntry[]) {
   fs.writeFileSync(feedbackFile, JSON.stringify(entries, null, 2));
 }
 
+// --- Reconocimientos: nominaciones vienen del sheet "Repositorio Reconocimientos"; lo que
+// nosotros generamos y aprobamos (diploma, estado) se guarda aparte en Netlify Blobs, sin
+// escribir de vuelta al sheet que alimenta el bot de Slack. ---
+type RecognitionStatus = 'pendiente' | 'generado' | 'aprobado' | 'publicado' | 'rechazado';
+
+interface RecognitionRecord {
+  id: string;
+  month: string;
+  nominatorName: string;
+  nominatorEmail: string;
+  rawText: string;
+  nomineeName: string;
+  diplomaText: string;
+  tone: 'formal' | 'calido';
+  status: RecognitionStatus;
+  reviewedBy?: string;
+  publishedAt?: string;
+}
+
+const recognitionsFile = path.resolve(process.env.RECOGNITIONS_FILE || './data/pulso-recognitions.json');
+
+async function loadRecognitionRecords(): Promise<Record<string, RecognitionRecord>> {
+  if (useNetlifyBlobs) {
+    const remote = await blobsStore('pulso-toroto').get('recognitions', { type: 'json' });
+    return remote && typeof remote === 'object' ? (remote as Record<string, RecognitionRecord>) : {};
+  }
+  try {
+    return JSON.parse(fs.readFileSync(recognitionsFile, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+async function saveRecognitionRecords(records: Record<string, RecognitionRecord>) {
+  if (useNetlifyBlobs) {
+    await blobsStore('pulso-toroto').setJSON('recognitions', records);
+    return;
+  }
+  fs.mkdirSync(path.dirname(recognitionsFile), { recursive: true });
+  fs.writeFileSync(recognitionsFile, JSON.stringify(records, null, 2));
+}
+
+async function fetchNominations(): Promise<Nomination[]> {
+  if (!RECOGNITION_SHEET_ID) return [];
+  const rows = await fetchSheetRows(RECOGNITION_SHEET_ID, 'Respuestas');
+  return parseNominations(rows);
+}
+
+/** Extrae a quién se reconoce y redacta el texto del diploma a partir del texto libre. */
+async function generateDiplomaWithAI(rawText: string, tone: 'formal' | 'calido'): Promise<{ nomineeName: string; diplomaText: string }> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY no está configurado en el servidor.');
+  }
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const toneInstruction = tone === 'formal'
+    ? 'Tono formal e institucional.'
+    : 'Tono cálido y cercano, como si lo escribiera un compañero de equipo.';
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    contents: `Un colaborador de Toroto escribió este mensaje para nominar a alguien a un reconocimiento mensual:\n\n"${rawText}"\n\nExtrae el nombre de la persona reconocida (si el mensaje no lo deja claro, responde "nomineeName": "") y redacta una mención de honor breve (2-3 frases) para un diploma, basada únicamente en lo que dice el mensaje, sin inventar logros que no se mencionen. ${toneInstruction} Devuelve JSON con "nomineeName" y "diplomaText".`,
+    config: { responseMimeType: 'application/json' },
+  });
+  const parsed = JSON.parse(response.text || '{}');
+  return {
+    nomineeName: clean(parsed.nomineeName, 200),
+    diplomaText: clean(parsed.diplomaText, 1500),
+  };
+}
+
+function currentRecognitionMonth(): string {
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const now = new Date();
+  return `${MESES[now.getMonth()]} ${now.getFullYear()}`;
+}
+
 // --- Express app -------------------------------------------------------------
 function auth(req: Request, res: Response, next: NextFunction) {
   const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -228,6 +307,7 @@ export async function createApp() {
       role: access.dataScope === 'all' ? 'ejecutivo' : 'lider',
       teams: scopedTeamNames(access, data.teams),
       canSeeFeedback: access.canSeeFeedback,
+      canManageRecognitions: FEEDBACK_INBOX_EMAILS.includes(session.email),
     });
   });
 
@@ -422,6 +502,109 @@ export async function createApp() {
     }
     const entries = await loadFeedback();
     res.json({ entries: entries.reverse() });
+  });
+
+  function requireRecognitionManager(req: Request, res: Response, next: NextFunction) {
+    const session = (req as any).session as SignedSession;
+    if (!FEEDBACK_INBOX_EMAILS.includes(session.email)) {
+      return res.status(403).json({ error: 'No tienes permiso para gestionar reconocimientos.' });
+    }
+    next();
+  }
+
+  app.get('/api/recognitions/pending', requireRecognitionManager, async (_req, res) => {
+    try {
+      const [nominations, records] = await Promise.all([fetchNominations(), loadRecognitionRecords()]);
+      const pending = nominations
+        .map(n => ({ ...n, record: records[n.id] || null }))
+        .filter(n => !n.record || (n.record.status !== 'publicado' && n.record.status !== 'rechazado'));
+      res.json({ month: currentRecognitionMonth(), pending });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible leer las nominaciones.' });
+    }
+  });
+
+  app.post('/api/recognitions/:id/generate', requireRecognitionManager, async (req, res) => {
+    try {
+      const id = clean(req.params.id, 200);
+      const tone: 'formal' | 'calido' = req.body?.tone === 'formal' ? 'formal' : 'calido';
+      const nominations = await fetchNominations();
+      const nomination = nominations.find(n => n.id === id);
+      if (!nomination) return res.status(404).json({ error: 'Nominación no encontrada.' });
+
+      const { nomineeName, diplomaText } = await generateDiplomaWithAI(nomination.rawText, tone);
+      const records = await loadRecognitionRecords();
+      records[id] = {
+        id,
+        month: nomination.month || currentRecognitionMonth(),
+        nominatorName: nomination.nominatorName,
+        nominatorEmail: nomination.nominatorEmail,
+        rawText: nomination.rawText,
+        nomineeName,
+        diplomaText,
+        tone,
+        status: 'generado',
+      };
+      await saveRecognitionRecords(records);
+      res.json({ record: records[id] });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible generar el diploma con IA.' });
+    }
+  });
+
+  app.post('/api/recognitions/:id/approve', requireRecognitionManager, async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const id = clean(req.params.id, 200);
+    const records = await loadRecognitionRecords();
+    const record = records[id];
+    if (!record) return res.status(404).json({ error: 'Primero genera el diploma con IA.' });
+    const nomineeName = clean(req.body?.nomineeName, 200);
+    const diplomaText = clean(req.body?.diplomaText, 1500);
+    if (nomineeName) record.nomineeName = nomineeName;
+    if (diplomaText) record.diplomaText = diplomaText;
+    record.status = 'aprobado';
+    record.reviewedBy = session.email;
+    await saveRecognitionRecords(records);
+    res.json({ record });
+  });
+
+  app.post('/api/recognitions/:id/reject', requireRecognitionManager, async (req, res) => {
+    const id = clean(req.params.id, 200);
+    const records = await loadRecognitionRecords();
+    const nominations = await fetchNominations();
+    const nomination = nominations.find(n => n.id === id);
+    if (!nomination && !records[id]) return res.status(404).json({ error: 'Nominación no encontrada.' });
+    records[id] = {
+      ...(records[id] || {
+        id, month: nomination?.month || currentRecognitionMonth(), nominatorName: nomination?.nominatorName || '',
+        nominatorEmail: nomination?.nominatorEmail || '', rawText: nomination?.rawText || '', nomineeName: '', diplomaText: '', tone: 'calido',
+      }),
+      status: 'rechazado',
+    };
+    await saveRecognitionRecords(records);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/recognitions/publish', requireRecognitionManager, async (_req, res) => {
+    const records = await loadRecognitionRecords();
+    const month = currentRecognitionMonth();
+    let published = 0;
+    for (const record of Object.values(records)) {
+      if (record.status === 'aprobado' && record.month === month) {
+        record.status = 'publicado';
+        record.publishedAt = new Date().toISOString();
+        published++;
+      }
+    }
+    await saveRecognitionRecords(records);
+    res.json({ published, month });
+  });
+
+  app.get('/api/recognitions/published', async (req, res) => {
+    const month = clean(req.query.month as string, 60) || currentRecognitionMonth();
+    const records = await loadRecognitionRecords();
+    const diplomas = Object.values(records).filter(r => r.status === 'publicado' && r.month === month);
+    res.json({ month, diplomas });
   });
 
   if (!process.env.NETLIFY && process.env.NODE_ENV !== 'production') {

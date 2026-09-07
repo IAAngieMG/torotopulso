@@ -25,6 +25,7 @@ export interface Me {
   role: 'ejecutivo' | 'lider';
   teams: string[];
   canSeeFeedback: boolean;
+  canManageRecognitions: boolean;
 }
 
 export interface Kpis {
@@ -152,4 +153,59 @@ export function sendFeedback(message: string, view: string) {
 
 export function fetchFeedbackInbox() {
   return api('/api/feedback') as Promise<{ entries: FeedbackEntry[] }>;
+}
+
+export interface Nomination {
+  id: string;
+  submittedAt: string;
+  month: string;
+  nominatorName: string;
+  nominatorEmail: string;
+  rawText: string;
+  record: RecognitionRecord | null;
+}
+
+export interface RecognitionRecord {
+  id: string;
+  month: string;
+  nominatorName: string;
+  nominatorEmail: string;
+  rawText: string;
+  nomineeName: string;
+  diplomaText: string;
+  tone: 'formal' | 'calido';
+  status: 'pendiente' | 'generado' | 'aprobado' | 'publicado' | 'rechazado';
+  reviewedBy?: string;
+  publishedAt?: string;
+}
+
+export function fetchPendingRecognitions() {
+  return api('/api/recognitions/pending') as Promise<{ month: string; pending: Nomination[] }>;
+}
+
+export function generateDiploma(id: string, tone: 'formal' | 'calido') {
+  return api(`/api/recognitions/${encodeURIComponent(id)}/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ tone }),
+  }) as Promise<{ record: RecognitionRecord }>;
+}
+
+export function approveDiploma(id: string, nomineeName?: string, diplomaText?: string) {
+  return api(`/api/recognitions/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ nomineeName, diplomaText }),
+  }) as Promise<{ record: RecognitionRecord }>;
+}
+
+export function rejectNomination(id: string) {
+  return api(`/api/recognitions/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+}
+
+export function publishRecognitions() {
+  return api('/api/recognitions/publish', { method: 'POST' }) as Promise<{ published: number; month: string }>;
+}
+
+export function fetchPublishedRecognitions(month?: string) {
+  const q = month ? `?month=${encodeURIComponent(month)}` : '';
+  return api(`/api/recognitions/published${q}`) as Promise<{ month: string; diplomas: RecognitionRecord[] }>;
 }

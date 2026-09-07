@@ -6,12 +6,15 @@ import Dashboard from './components/Dashboard.tsx';
 import TeamDetail from './components/TeamDetail.tsx';
 import PersonDetail from './components/PersonDetail.tsx';
 import FeedbackInbox from './components/FeedbackInbox.tsx';
+import RecognitionsAdmin from './components/RecognitionsAdmin.tsx';
+import RecognitionsGallery from './components/RecognitionsGallery.tsx';
 
 type View =
   | { name: 'overview' }
   | { name: 'team'; team: string }
   | { name: 'person'; email: string }
-  | { name: 'feedback' };
+  | { name: 'feedback' }
+  | { name: 'recognitions' };
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -44,6 +47,7 @@ export default function App() {
           onOpenTeam={team => setView({ name: 'team', team })}
           onOpenPerson={email => setView({ name: 'person', email })}
           onOpenFeedback={() => setView({ name: 'feedback' })}
+          onOpenRecognitions={() => setView({ name: 'recognitions' })}
         />
       )}
       {view.name === 'team' && (
@@ -58,6 +62,12 @@ export default function App() {
         <PersonDetail me={me} email={view.email} onBack={() => setView({ name: 'overview' })} />
       )}
       {view.name === 'feedback' && me.canSeeFeedback && <FeedbackInbox name={me.name} />}
+      {view.name === 'recognitions' &&
+        (me.canManageRecognitions ? (
+          <RecognitionsAdmin me={me} onBack={() => setView({ name: 'overview' })} />
+        ) : (
+          <RecognitionsGallery me={me} onBack={() => setView({ name: 'overview' })} />
+        ))}
     </Shell>
   );
 }
