@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Award, CalendarClock, Send } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock, Send } from 'lucide-react';
 import { fetchPublishedRecognitions, scheduleLaunch, type Me, type RecognitionRecord } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
+import DiplomaCard from './DiplomaCard.tsx';
 
 const PREVIEW_NAMES = ['Santiago', 'Ane', 'Patricia'];
 
@@ -119,16 +120,15 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
 
         {current && (
           <div className="rounded-xl border border-toroto-border bg-white p-6">
-            <div className="border-2 border-dashed border-amber-300 rounded-lg p-6 text-center bg-amber-50/40">
-              <Award className="mx-auto text-amber-500 mb-2" size={28} />
-              <p className="text-xs text-slate-500 mb-3">Se otorga con orgullo y distinción el presente reconocimiento a:</p>
-              <p className="font-display text-2xl font-bold text-[#0b1c30] mb-4">{current.nomineeName || 'Sin especificar'}</p>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Mención de honor</p>
-              <p className="text-sm text-slate-700">{current.diplomaText}</p>
-              <p className="text-xs text-slate-400 mt-4">
-                {current.month} · Nominado por {current.nominatorName || current.nominatorEmail}
-              </p>
-            </div>
+            <DiplomaCard
+              nomineeName={current.nomineeName}
+              nomineeRole={current.nomineeRole}
+              mention={current.diplomaText}
+              month={current.month}
+            />
+            <p className="text-xs text-slate-400 mt-3 text-center">
+              Nominado por {current.nominatorName || current.nominatorEmail}
+            </p>
 
             {diplomas && diplomas.length > 1 && (
               <div className="flex items-center justify-between mt-4">

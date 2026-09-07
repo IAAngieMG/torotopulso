@@ -13,6 +13,7 @@ import {
   type Nomination,
 } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
+import DiplomaCard from './DiplomaCard.tsx';
 
 function LaunchAlert({ request, onDismissed }: { request: LaunchRequest; onDismissed: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,7 @@ interface NominationCardProps {
 function NominationCard({ nomination, onChanged }: NominationCardProps) {
   const [tone, setTone] = useState<'formal' | 'calido'>(nomination.record?.tone || 'calido');
   const [nomineeName, setNomineeName] = useState(nomination.record?.nomineeName || '');
+  const [nomineeRole, setNomineeRole] = useState(nomination.record?.nomineeRole || '');
   const [diplomaText, setDiplomaText] = useState(nomination.record?.diplomaText || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -66,6 +68,7 @@ function NominationCard({ nomination, onChanged }: NominationCardProps) {
     try {
       const { record } = await generateDiploma(nomination.id, tone);
       setNomineeName(record.nomineeName);
+      setNomineeRole(record.nomineeRole);
       setDiplomaText(record.diplomaText);
       onChanged();
     } catch (e: any) {
@@ -79,7 +82,7 @@ function NominationCard({ nomination, onChanged }: NominationCardProps) {
     setBusy(true);
     setError('');
     try {
-      await approveDiploma(nomination.id, nomineeName, diplomaText);
+      await approveDiploma(nomination.id, nomineeName, nomineeRole, diplomaText);
       onChanged();
     } catch (e: any) {
       setError(e.message);
@@ -119,21 +122,31 @@ function NominationCard({ nomination, onChanged }: NominationCardProps) {
       <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3">{nomination.rawText}</p>
 
       {(status === 'generado' || status === 'aprobado') && (
-        <div className="space-y-2 border-t border-toroto-border pt-3">
-          <label className="block text-xs font-medium text-slate-500">Persona reconocida</label>
-          <input
-            value={nomineeName}
-            onChange={e => setNomineeName(e.target.value)}
-            className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
-            placeholder="Nombre y apellido"
-          />
-          <label className="block text-xs font-medium text-slate-500">Mención de honor</label>
-          <textarea
-            value={diplomaText}
-            onChange={e => setDiplomaText(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
-          />
+        <div className="grid md:grid-cols-2 gap-4 border-t border-toroto-border pt-3">
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-500">Persona reconocida</label>
+            <input
+              value={nomineeName}
+              onChange={e => setNomineeName(e.target.value)}
+              className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
+              placeholder="Nombre y apellido"
+            />
+            <label className="block text-xs font-medium text-slate-500">Rol / equipo (opcional)</label>
+            <input
+              value={nomineeRole}
+              onChange={e => setNomineeRole(e.target.value)}
+              className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
+              placeholder="Ej. Líder, Gerencia de Restauración Territorial"
+            />
+            <label className="block text-xs font-medium text-slate-500">Mención de honor</label>
+            <textarea
+              value={diplomaText}
+              onChange={e => setDiplomaText(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
+            />
+          </div>
+          <DiplomaCard nomineeName={nomineeName} nomineeRole={nomineeRole} mention={diplomaText} month={nomination.month} />
         </div>
       )}
 

@@ -185,6 +185,7 @@ export interface RecognitionRecord {
   nominatorEmail: string;
   rawText: string;
   nomineeName: string;
+  nomineeRole: string;
   diplomaText: string;
   tone: 'formal' | 'calido';
   status: 'pendiente' | 'generado' | 'aprobado' | 'publicado' | 'rechazado';
@@ -203,10 +204,10 @@ export function generateDiploma(id: string, tone: 'formal' | 'calido') {
   }) as Promise<{ record: RecognitionRecord }>;
 }
 
-export function approveDiploma(id: string, nomineeName?: string, diplomaText?: string) {
+export function approveDiploma(id: string, nomineeName?: string, nomineeRole?: string, diplomaText?: string) {
   return api(`/api/recognitions/${encodeURIComponent(id)}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ nomineeName, diplomaText }),
+    body: JSON.stringify({ nomineeName, nomineeRole, diplomaText }),
   }) as Promise<{ record: RecognitionRecord }>;
 }
 

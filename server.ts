@@ -157,11 +157,23 @@ interface RecognitionRecord {
   nominatorEmail: string;
   rawText: string;
   nomineeName: string;
+  nomineeRole: string;
   diplomaText: string;
   tone: 'formal' | 'calido';
   status: RecognitionStatus;
   reviewedBy?: string;
   publishedAt?: string;
+}
+
+/** Si el nombre extraído por la IA coincide con alguien real del roster, usa su equipo como "rol". */
+function guessNomineeRole(nomineeName: string, data: PulseData): string {
+  if (!nomineeName) return '';
+  const target = nomineeName.trim().toLowerCase();
+  for (const team of data.teams) {
+    if (team.leaderName.toLowerCase() === target) return `Líder, ${team.name}`;
+    if (team.members.some(m => m.toLowerCase() === target)) return team.name;
+  }
+  return '';
 }
 
 const recognitionsFile = path.resolve(process.env.RECOGNITIONS_FILE || './data/pulso-recognitions.json');
@@ -611,6 +623,7 @@ export async function createApp() {
       if (!nomination) return res.status(404).json({ error: 'Nominación no encontrada.' });
 
       const { nomineeName, diplomaText } = await generateDiplomaWithAI(nomination.rawText, tone);
+      const pulseData = await loadPulseData();
       const records = await loadRecognitionRecords();
       records[id] = {
         id,
@@ -619,6 +632,7 @@ export async function createApp() {
         nominatorEmail: nomination.nominatorEmail,
         rawText: nomination.rawText,
         nomineeName,
+        nomineeRole: guessNomineeRole(nomineeName, pulseData),
         diplomaText,
         tone,
         status: 'generado',
@@ -637,8 +651,10 @@ export async function createApp() {
     const record = records[id];
     if (!record) return res.status(404).json({ error: 'Primero genera el diploma con IA.' });
     const nomineeName = clean(req.body?.nomineeName, 200);
+    const nomineeRole = clean(req.body?.nomineeRole, 200);
     const diplomaText = clean(req.body?.diplomaText, 1500);
     if (nomineeName) record.nomineeName = nomineeName;
+    if (req.body?.nomineeRole !== undefined) record.nomineeRole = nomineeRole;
     if (diplomaText) record.diplomaText = diplomaText;
     record.status = 'aprobado';
     record.reviewedBy = session.email;
@@ -655,7 +671,7 @@ export async function createApp() {
     records[id] = {
       ...(records[id] || {
         id, month: nomination?.month || currentRecognitionMonth(), nominatorName: nomination?.nominatorName || '',
-        nominatorEmail: nomination?.nominatorEmail || '', rawText: nomination?.rawText || '', nomineeName: '', diplomaText: '', tone: 'calido',
+        nominatorEmail: nomination?.nominatorEmail || '', rawText: nomination?.rawText || '', nomineeName: '', nomineeRole: '', diplomaText: '', tone: 'calido',
       }),
       status: 'rechazado',
     };
