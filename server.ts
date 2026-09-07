@@ -1,0 +1,384 @@
+import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import { getStore } from '@netlify/blobs';
+import { signSession, verifySession, type SignedSession } from './src/lib/sessionToken.ts';
+import { fetchAllSheets } from './src/lib/sheets.ts';
+import {
+  parseGrupos,
+  parseGruposDetalle,
+  parseFiltroEspecial,
+  parseSlackId,
+  parseRespuestas,
+  parsePreguntas,
+  currentQuestionFor,
+  isFridaySignal,
+  type Team,
+  type SubTeam,
+  type ResponseRecord,
+  type QuestionTemplate,
+} from './src/lib/pulseData.ts';
+import { resolveAccess, FEEDBACK_INBOX_EMAILS, type AccessResult } from './src/lib/permissions.ts';
+import { computeKpis, computeWeeklySeries, computeEnergyDistribution, inRange, type RangeFilter } from './src/lib/scoring.ts';
+import { buildEmailToTeams } from './src/lib/teamLookup.ts';
+
+const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
+
+const googleClientId = clean(process.env.GOOGLE_CLIENT_ID, 300).replace(/^['"]|['"]$/g, '');
+const googleClientIdValid = /^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(googleClientId);
+const sessionSecret = clean(process.env.SESSION_SECRET, 500);
+const SHEET_ID = clean(process.env.SHEET_ID, 200);
+
+function createSessionToken(session: SignedSession) {
+  return signSession(session, sessionSecret);
+}
+function verifySessionToken(token: string) {
+  return verifySession(token, sessionSecret);
+}
+
+// --- Sheet data cache -------------------------------------------------------
+interface PulseData {
+  teams: Team[];
+  subTeams: SubTeam[];
+  filtroEspecial: Map<string, string[]>;
+  slackByName: Map<string, string>;
+  slackByEmail: Map<string, string>;
+  firstNameByEmail: Map<string, string>;
+  emailToTeams: Map<string, string[]>;
+  responses: ResponseRecord[];
+  preguntas: QuestionTemplate[];
+}
+
+const CACHE_TTL_MS = 90_000;
+let cache: { data: PulseData; fetchedAt: number } | null = null;
+let inflight: Promise<PulseData> | null = null;
+
+async function loadPulseData(): Promise<PulseData> {
+  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.data;
+  if (!inflight) {
+    inflight = (async () => {
+      const sheets = await fetchAllSheets(SHEET_ID);
+      const teams = parseGrupos(sheets.grupos);
+      const subTeams = parseGruposDetalle(sheets.gruposDetalle);
+      const filtroEspecial = parseFiltroEspecial(sheets.filtroEspecial);
+      const { byName: slackByName, byEmail: slackByEmail, firstNameByEmail } = parseSlackId(sheets.slackId);
+      const responses = parseRespuestas(sheets.respuestas);
+      const preguntas = parsePreguntas(sheets.preguntas);
+      const emailToTeams = buildEmailToTeams(teams, slackByName);
+      const data: PulseData = {
+        teams, subTeams, filtroEspecial, slackByName, slackByEmail, firstNameByEmail, emailToTeams, responses, preguntas,
+      };
+      cache = { data, fetchedAt: Date.now() };
+      return data;
+    })().finally(() => {
+      inflight = null;
+    });
+  }
+  return inflight;
+}
+
+function accessFor(data: PulseData, email: string): AccessResult {
+  return resolveAccess(email, data.slackByEmail, data.teams, data.subTeams, data.filtroEspecial);
+}
+
+/** Team names an access grant actually covers, expanded to every real team when scope is "all". */
+function scopedTeamNames(access: AccessResult, allTeams: Team[]): string[] {
+  return access.dataScope === 'all' ? allTeams.map(t => t.name) : access.dataScope;
+}
+
+// --- Netlify Blobs (feedback storage), with the same fallback we needed in Auditor Toroto ---
+const useNetlifyBlobs = Boolean(process.env.NETLIFY || process.env.NETLIFY_SITE_ID);
+const feedbackFile = path.resolve(process.env.FEEDBACK_FILE || './data/pulso-feedback.json');
+
+function blobsStore(name: string) {
+  const siteID = process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  return siteID && token ? getStore({ name, siteID, token }) : getStore(name);
+}
+
+interface FeedbackEntry {
+  id: string;
+  message: string;
+  authorName: string;
+  authorEmail: string;
+  view: string;
+  createdAt: string;
+}
+
+async function loadFeedback(): Promise<FeedbackEntry[]> {
+  if (useNetlifyBlobs) {
+    const remote = await blobsStore('pulso-toroto').get('feedback', { type: 'json' });
+    return Array.isArray(remote) ? (remote as FeedbackEntry[]) : [];
+  }
+  try {
+    return JSON.parse(fs.readFileSync(feedbackFile, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+async function saveFeedback(entries: FeedbackEntry[]) {
+  if (useNetlifyBlobs) {
+    await blobsStore('pulso-toroto').setJSON('feedback', entries);
+    return;
+  }
+  fs.mkdirSync(path.dirname(feedbackFile), { recursive: true });
+  fs.writeFileSync(feedbackFile, JSON.stringify(entries, null, 2));
+}
+
+// --- Express app -------------------------------------------------------------
+function auth(req: Request, res: Response, next: NextFunction) {
+  const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const s = verifySessionToken(t);
+  if (!s) return res.status(401).json({ error: 'Sesión requerida o expirada.' });
+  (req as any).session = s;
+  next();
+}
+
+export async function createApp() {
+  const app = express();
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '256kb' }));
+
+  app.use((req, res, next) => {
+    const allowed = new Set([process.env.APP_ORIGIN, process.env.URL, 'http://localhost:3001'].filter(Boolean));
+    const o = req.headers.origin;
+    if (o && allowed.has(o)) {
+      res.setHeader('Access-Control-Allow-Origin', o);
+      res.setHeader('Vary', 'Origin');
+    }
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  app.get('/api/config', (_req, res) =>
+    res.json({
+      googleClientId: googleClientIdValid ? googleClientId : '',
+      oauthConfigured: googleClientIdValid,
+      oauthConfigurationError: googleClientIdValid
+        ? ''
+        : 'GOOGLE_CLIENT_ID no está configurado o no tiene el formato de un cliente OAuth Web.',
+      sessionConfigured: sessionSecret.length >= 64,
+      appOrigin: process.env.APP_ORIGIN || '',
+      domain: 'toroto.mx',
+    }),
+  );
+
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+  app.post('/api/auth/google', async (req, res) => {
+    try {
+      if (!googleClientIdValid) {
+        return res.status(503).json({ error: 'Google OAuth no está configurado en el servidor.' });
+      }
+      const credential = clean(req.body?.credential, 10000);
+      if (!credential) return res.status(400).json({ error: 'Credencial de Google no recibida.' });
+
+      const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+      if (!r.ok) return res.status(401).json({ error: 'Credencial de Google inválida.' });
+      const p: any = await r.json();
+      const email = clean(p.email, 320).toLowerCase();
+      const name = clean(p.name, 200);
+      const verified = String(p.email_verified) === 'true' || p.email_verified === true;
+      if (p.aud !== googleClientId && p.azp !== googleClientId) {
+        return res.status(401).json({ error: 'La credencial no corresponde a este Client ID.' });
+      }
+      if (!verified) return res.status(401).json({ error: 'El correo electrónico no está verificado en Google.' });
+      if (!email.endsWith('@toroto.mx')) {
+        return res.status(403).json({ error: `Acceso restringido: el correo ${email} no pertenece al dominio @toroto.mx.` });
+      }
+
+      const data = await loadPulseData();
+      const access = accessFor(data, email);
+      if (!access.granted) {
+        return res.status(403).json({
+          error: 'Tu cuenta no tiene un rol de liderazgo asignado en Pulso Toroto. Pide que te agreguen en la hoja de Grupos o Filtro especial.',
+        });
+      }
+
+      const displayName = data.firstNameByEmail.get(email) || name.split(' ')[0] || email.split('@')[0];
+      const session: SignedSession = { email, name: displayName, expiresAt: Date.now() + 8 * 3600000 };
+      res.json({ sessionToken: createSessionToken(session) });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible validar la sesión con Google.' });
+    }
+  });
+
+  app.use('/api', auth);
+
+  app.get('/api/me', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+    res.json({
+      email: session.email,
+      name: session.name,
+      role: access.dataScope === 'all' ? 'ejecutivo' : 'lider',
+      teams: scopedTeamNames(access, data.teams),
+      canSeeFeedback: access.canSeeFeedback,
+    });
+  });
+
+  app.get('/api/pulse/overview', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const myTeams = scopedTeamNames(access, data.teams);
+    const requestedTeam = clean(req.query.team as string, 200);
+    if (requestedTeam && !myTeams.includes(requestedTeam)) {
+      return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
+    }
+    const teamsInScope = requestedTeam ? [requestedTeam] : myTeams;
+    const rosterEmails = new Set<string>();
+    for (const [email, teams] of data.emailToTeams) {
+      if (teams.some(t => teamsInScope.includes(t))) rosterEmails.add(email);
+    }
+
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const signal = clean(req.query.signal as string).toUpperCase() || 'ALL';
+
+    let records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
+    if (signal !== 'ALL') {
+      records = signal === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === signal);
+    }
+
+    res.json({
+      teams: teamsInScope,
+      availableTeams: myTeams,
+      kpis: computeKpis(records, rosterEmails.size),
+      weeklySeries: computeWeeklySeries(records),
+      energyDistribution: computeEnergyDistribution(records),
+      questions: {
+        BD: currentQuestionFor(data.preguntas, 'BD'),
+        AL: currentQuestionFor(data.preguntas, 'AL'),
+        BT: currentQuestionFor(data.preguntas, 'BT'),
+        VIERNES: currentQuestionFor(data.preguntas, 'VIERNES'),
+      },
+    });
+  });
+
+  app.get('/api/pulse/team/:team', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const teamName = clean(req.params.team, 200);
+    const myTeams = scopedTeamNames(access, data.teams);
+    if (!myTeams.includes(teamName)) return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
+
+    const team = data.teams.find(t => t.name === teamName);
+    if (!team) return res.status(404).json({ error: 'Equipo no encontrado.' });
+
+    const memberNames = [team.leaderName, ...team.members];
+    const members = memberNames
+      .map(fullName => {
+        const email = data.slackByName.get(fullName);
+        if (!email) return null;
+        const personRecords = data.responses.filter(r => r.email === email && inRange(r, { range: 'week' }));
+        return {
+          fullName,
+          email,
+          isLeader: fullName === team.leaderName,
+          weeklyKpis: computeKpis(personRecords, 1),
+        };
+      })
+      .filter((m): m is NonNullable<typeof m> => m !== null);
+
+    const rosterEmails = new Set(members.map(m => m.email));
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const records = data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range }));
+
+    res.json({
+      team: team.name,
+      leader: team.leaderName,
+      kpis: computeKpis(records, rosterEmails.size),
+      weeklySeries: computeWeeklySeries(records),
+      energyDistribution: computeEnergyDistribution(records),
+      members,
+    });
+  });
+
+  app.get('/api/pulse/person/:email', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const data = await loadPulseData();
+    const access = accessFor(data, session.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const targetEmail = clean(req.params.email, 320).toLowerCase();
+    const myTeams = scopedTeamNames(access, data.teams);
+    const personTeams = data.emailToTeams.get(targetEmail) || [];
+    const isSelf = targetEmail === session.email;
+    if (!isSelf && !personTeams.some(t => myTeams.includes(t))) {
+      return res.status(403).json({ error: 'No tienes acceso a esta persona.' });
+    }
+
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const records = data.responses
+      .filter(r => r.email === targetEmail && inRange(r, { range }))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    res.json({
+      email: targetEmail,
+      fullName: data.slackByEmail.get(targetEmail) || '',
+      teams: personTeams,
+      kpis: computeKpis(records, 1),
+      responses: records,
+    });
+  });
+
+  app.post('/api/feedback', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const message = clean(req.body?.message, 2000);
+    const view = clean(req.body?.view, 200);
+    if (!message) return res.status(400).json({ error: 'Escribe un mensaje antes de enviar.' });
+    const entries = await loadFeedback();
+    entries.push({
+      id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      message,
+      authorName: session.name,
+      authorEmail: session.email,
+      view,
+      createdAt: new Date().toISOString(),
+    });
+    await saveFeedback(entries);
+    res.status(201).json({ ok: true });
+  });
+
+  app.get('/api/feedback', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    if (!FEEDBACK_INBOX_EMAILS.includes(session.email)) {
+      return res.status(403).json({ error: 'No tienes acceso al buzón de feedback.' });
+    }
+    const entries = await loadFeedback();
+    res.json({ entries: entries.reverse() });
+  });
+
+  if (!process.env.NETLIFY && process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
+    app.use(vite.middlewares);
+  } else {
+    const dist = path.join(process.cwd(), 'dist');
+    app.use(express.static(dist));
+    app.get(/.*/, (_q, resp) => resp.sendFile(path.join(dist, 'index.html')));
+  }
+
+  return app;
+}
+
+if (!process.env.NETLIFY) {
+  createApp().then(app => {
+    const PORT = Number(process.env.PORT || 3001);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Pulso Toroto corriendo en http://0.0.0.0:${PORT}`);
+    });
+  });
+}
