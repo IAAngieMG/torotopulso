@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { fetchTeamDetail, type Me, type RangeOption, type SignalOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
+import { fetchTeamDetail, DEFAULT_RANGE, type Me, type RangeOption, type SignalOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
@@ -13,7 +13,7 @@ interface TeamDetailProps {
 }
 
 export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetailProps) {
-  const [range, setRange] = useState<RangeOption>('week');
+  const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<TeamDetailData | null>(null);
   const [error, setError] = useState('');

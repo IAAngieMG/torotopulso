@@ -1,9 +1,61 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Award } from 'lucide-react';
-import { fetchPublishedRecognitions, type Me, type RecognitionRecord } from '../lib/apiClient.ts';
+import { ArrowLeft, ChevronLeft, ChevronRight, Award, CalendarClock, Send } from 'lucide-react';
+import { fetchPublishedRecognitions, scheduleLaunch, type Me, type RecognitionRecord } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 
 const PREVIEW_NAMES = ['Santiago', 'Ane', 'Patricia'];
+
+function LaunchScheduler() {
+  const [date, setDate] = useState('');
+  const [label, setLabel] = useState('');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const submit = async () => {
+    if (!date) return;
+    setStatus('sending');
+    try {
+      await scheduleLaunch(new Date(date).toISOString(), label);
+      setStatus('sent');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-toroto-border bg-white p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <CalendarClock size={16} className="text-toroto-primary" />
+        <p className="font-display font-semibold text-sm">Programador de lanzamiento</p>
+      </div>
+      <p className="text-xs text-slate-500">
+        Programa cuándo se lanza el próximo ciclo de reconocimientos. Angie y Karla recibirán la solicitud para generar y aprobar los diplomas.
+      </p>
+      <input
+        value={label}
+        onChange={e => setLabel(e.target.value)}
+        placeholder="Ej. Lanzar ciclo de reconocimientos Fiestas Patrias Septiembre"
+        className="w-full rounded-lg border border-toroto-border px-3 py-2 text-sm"
+      />
+      <div className="flex flex-wrap gap-2">
+        <input
+          type="datetime-local"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          className="rounded-lg border border-toroto-border px-3 py-2 text-sm"
+        />
+        <button
+          onClick={submit}
+          disabled={!date || status === 'sending'}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-toroto-primary text-white text-sm font-semibold px-4 py-2 disabled:opacity-50"
+        >
+          <Send size={14} /> Programar lanzamiento
+        </button>
+      </div>
+      {status === 'sent' && <p className="text-xs text-emerald-600">Listo — Angie y Karla ya pueden verla.</p>}
+      {status === 'error' && <p className="text-xs text-red-600">No se pudo enviar la solicitud.</p>}
+    </div>
+  );
+}
 
 export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: () => void }) {
   const [month, setMonth] = useState('');
@@ -23,6 +75,7 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
 
   const displayName = previewAs || me.name;
   const current = diplomas?.[index];
+  const isSantiago = me.email === 'santiago@toroto.mx';
 
   return (
     <div>
@@ -53,6 +106,8 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
             </select>
           )}
         </div>
+
+        {isSantiago && <LaunchScheduler />}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!diplomas && !error && <p className="text-sm text-slate-500">Cargando…</p>}

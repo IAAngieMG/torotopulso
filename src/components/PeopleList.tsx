@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { fetchPeople, type PersonSummary, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
+import { fetchPeople, DEFAULT_RANGE, type PersonSummary, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { RangeSignalControls } from './PulseWidgets.tsx';
 
 export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders: boolean; onOpenPerson: (email: string) => void }) {
-  const [range, setRange] = useState<RangeOption>('week');
+  const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [query, setQuery] = useState('');
   const [people, setPeople] = useState<PersonSummary[] | null>(null);

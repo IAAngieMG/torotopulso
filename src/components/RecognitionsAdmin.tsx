@@ -1,15 +1,51 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Sparkles, Check, X, Send } from 'lucide-react';
+import { ArrowLeft, Sparkles, Check, X, Send, Bell } from 'lucide-react';
 import {
   approveDiploma,
+  dismissLaunchRequest,
+  fetchLaunchRequest,
   fetchPendingRecognitions,
   generateDiploma,
   publishRecognitions,
   rejectNomination,
+  type LaunchRequest,
   type Me,
   type Nomination,
 } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
+
+function LaunchAlert({ request, onDismissed }: { request: LaunchRequest; onDismissed: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const dismiss = async () => {
+    setBusy(true);
+    try {
+      await dismissLaunchRequest();
+      onDismissed();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex items-start gap-3">
+        <Bell size={16} className="text-amber-600 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-amber-900">Solicitud de Santiago</p>
+          <p className="text-sm text-amber-800">
+            "{request.label}" · Programado para {new Date(request.scheduledFor).toLocaleString('es-MX')}
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={dismiss}
+        disabled={busy}
+        className="text-xs font-medium rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-amber-700 disabled:opacity-50"
+      >
+        Marcar como atendida
+      </button>
+    </div>
+  );
+}
 
 interface NominationCardProps {
   nomination: Nomination;
@@ -146,6 +182,7 @@ export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () =
   const [pending, setPending] = useState<Nomination[] | null>(null);
   const [error, setError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
+  const [launchRequest, setLaunchRequest] = useState<LaunchRequest | null>(null);
 
   const load = () => {
     fetchPendingRecognitions()
@@ -154,6 +191,9 @@ export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () =
         setPending(d.pending);
       })
       .catch(e => setError(e.message));
+    fetchLaunchRequest()
+      .then(d => setLaunchRequest(d.request))
+      .catch(() => {});
   };
 
   useEffect(load, []);
@@ -181,6 +221,10 @@ export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () =
           <h2 className="font-display text-lg font-semibold">Reconocimientos del mes · {month}</h2>
           <p className="text-sm text-slate-500">Nominaciones recibidas vía Slack, listas para generar y aprobar su diploma.</p>
         </div>
+
+        {launchRequest && launchRequest.status === 'pendiente' && (
+          <LaunchAlert request={launchRequest} onDismissed={() => setLaunchRequest(null)} />
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!pending && !error && <p className="text-sm text-slate-500">Cargando…</p>}

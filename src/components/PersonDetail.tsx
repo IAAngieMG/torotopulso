@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { fetchPersonDetail, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
+import { fetchPersonDetail, DEFAULT_RANGE, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, RangeSignalControls } from './PulseWidgets.tsx';
 
 const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
 
 export default function PersonDetail({ me, email, onBack }: { me: Me; email: string; onBack: () => void }) {
-  const [range, setRange] = useState<RangeOption>('week');
+  const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<PersonDetailData | null>(null);
   const [error, setError] = useState('');

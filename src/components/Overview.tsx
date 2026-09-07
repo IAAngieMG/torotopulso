@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react';
 import { ChevronRight, Sparkles, Lightbulb } from 'lucide-react';
-import { fetchOverview, type AutoInsight, type Me, type Overview as OverviewData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
+import { fetchOverview, DEFAULT_RANGE, type AutoInsight, type Me, type Overview as OverviewData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, QuestionBanner, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 
 const SIGNAL_QUESTION_KEY: Record<SignalOption, keyof OverviewData['questions'] | null> = {
@@ -61,7 +61,7 @@ function AiInsightCard({ insight }: { insight: AutoInsight }) {
 }
 
 export default function Overview({ me, onOpenTeam }: { me: Me; onOpenTeam: (team: string) => void }) {
-  const [range, setRange] = useState<RangeOption>('week');
+  const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [activeTeam, setActiveTeam] = useState<string>('');
   const [data, setData] = useState<OverviewData | null>(null);

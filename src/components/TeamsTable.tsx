@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, Minus, ChevronRight } from 'lucide-react';
-import { fetchTeamsSummary, type RangeOption, type SignalOption, type TeamSummary } from '../lib/apiClient.ts';
+import { fetchTeamsSummary, DEFAULT_RANGE, type RangeOption, type SignalOption, type TeamSummary } from '../lib/apiClient.ts';
 import { RangeSignalControls } from './PulseWidgets.tsx';
 
 const TREND_ICON = { up: ArrowUp, down: ArrowDown, flat: Minus } as const;
 const TREND_COLOR = { up: 'text-emerald-600', down: 'text-red-500', flat: 'text-slate-400' } as const;
 
 export default function TeamsTable({ onOpenTeam }: { onOpenTeam: (team: string) => void }) {
-  const [range, setRange] = useState<RangeOption>('week');
+  const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [error, setError] = useState('');

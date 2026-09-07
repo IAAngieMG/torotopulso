@@ -131,6 +131,13 @@ export interface FeedbackEntry {
 export type { RangeOption } from './scoring.ts';
 export type SignalOption = 'ALL' | 'BD' | 'AL' | 'BT' | 'VIERNES';
 
+/**
+ * Rango que se muestra al entrar por primera vez a cualquier vista. Temporalmente en
+ * 'lastWeek' mientras la tropa acumula respuestas de la semana en curso — cámbialo de
+ * vuelta a 'week' en cuanto quieras que el feed arranque mostrando la semana actual.
+ */
+export const DEFAULT_RANGE: RangeOption = 'lastWeek';
+
 export function fetchOverview(range: RangeOption, signal: SignalOption, team?: string) {
   const params = new URLSearchParams({ range, signal });
   if (team) params.set('team', team);
@@ -214,4 +221,27 @@ export function publishRecognitions() {
 export function fetchPublishedRecognitions(month?: string) {
   const q = month ? `?month=${encodeURIComponent(month)}` : '';
   return api(`/api/recognitions/published${q}`) as Promise<{ month: string; diplomas: RecognitionRecord[] }>;
+}
+
+export interface LaunchRequest {
+  requestedBy: string;
+  requestedAt: string;
+  scheduledFor: string;
+  label: string;
+  status: 'pendiente' | 'atendida';
+}
+
+export function scheduleLaunch(scheduledFor: string, label: string) {
+  return api('/api/recognitions/launch', {
+    method: 'POST',
+    body: JSON.stringify({ scheduledFor, label }),
+  }) as Promise<{ request: LaunchRequest }>;
+}
+
+export function fetchLaunchRequest() {
+  return api('/api/recognitions/launch-request') as Promise<{ request: LaunchRequest | null }>;
+}
+
+export function dismissLaunchRequest() {
+  return api('/api/recognitions/launch/dismiss', { method: 'POST' });
 }

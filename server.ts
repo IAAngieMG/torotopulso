@@ -214,6 +214,38 @@ async function generateDiplomaWithAI(rawText: string, tone: 'formal' | 'calido')
   };
 }
 
+// --- Solicitud de lanzamiento de Santiago: dispara la alerta que ven Angie/Karla ---
+interface LaunchRequest {
+  requestedBy: string;
+  requestedAt: string;
+  scheduledFor: string;
+  label: string;
+  status: 'pendiente' | 'atendida';
+}
+
+async function loadLaunchRequest(): Promise<LaunchRequest | null> {
+  if (useNetlifyBlobs) {
+    const remote = await blobsStore('pulso-toroto').get('recognitionLaunch', { type: 'json' });
+    return remote && typeof remote === 'object' ? (remote as LaunchRequest) : null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(launchRequestFile, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function saveLaunchRequest(request: LaunchRequest | null) {
+  if (useNetlifyBlobs) {
+    await blobsStore('pulso-toroto').setJSON('recognitionLaunch', request);
+    return;
+  }
+  fs.mkdirSync(path.dirname(launchRequestFile), { recursive: true });
+  fs.writeFileSync(launchRequestFile, JSON.stringify(request, null, 2));
+}
+
+const launchRequestFile = path.resolve(process.env.LAUNCH_REQUEST_FILE || './data/pulso-launch-request.json');
+
 function currentRecognitionMonth(): string {
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const now = new Date();
@@ -530,6 +562,33 @@ export async function createApp() {
     }
     next();
   }
+
+  app.post('/api/recognitions/launch', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    if (session.email !== 'santiago@toroto.mx') {
+      return res.status(403).json({ error: 'Solo Santiago puede programar el lanzamiento del ciclo.' });
+    }
+    const scheduledFor = clean(req.body?.scheduledFor, 60);
+    const label = clean(req.body?.label, 200) || `Ciclo de reconocimientos ${currentRecognitionMonth()}`;
+    if (!scheduledFor) return res.status(400).json({ error: 'Falta la fecha de lanzamiento.' });
+    const request: LaunchRequest = { requestedBy: session.email, requestedAt: new Date().toISOString(), scheduledFor, label, status: 'pendiente' };
+    await saveLaunchRequest(request);
+    res.status(201).json({ request });
+  });
+
+  app.get('/api/recognitions/launch-request', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    if (session.email !== 'santiago@toroto.mx' && !FEEDBACK_INBOX_EMAILS.includes(session.email)) {
+      return res.status(403).json({ error: 'No tienes acceso a esta información.' });
+    }
+    const request = await loadLaunchRequest();
+    res.json({ request });
+  });
+
+  app.post('/api/recognitions/launch/dismiss', requireRecognitionManager, async (_req, res) => {
+    await saveLaunchRequest(null);
+    res.json({ ok: true });
+  });
 
   app.get('/api/recognitions/pending', requireRecognitionManager, async (_req, res) => {
     try {
