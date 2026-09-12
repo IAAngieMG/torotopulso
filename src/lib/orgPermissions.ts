@@ -84,6 +84,8 @@ export const VIEW_AS_TARGETS = [
   { email: 'karla@toroto.mx', label: 'Karla' },
   { email: 'alejandro@toroto.mx', label: 'Alejandro' },
   { email: 'dgavaldon@toroto.mx', label: 'Daniela' },
+  { email: 'ivancastro@toroto.mx', label: 'Iván' },
+  { email: 'david@toroto.mx', label: 'David' },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();
