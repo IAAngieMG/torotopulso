@@ -17,7 +17,7 @@ import {
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
 import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, teamByName, guessNomineeRole } from './src/lib/orgChart.ts';
-import { resolveOrgAccess, scopedTeamNames, FEEDBACK_INBOX_EMAILS, VIEW_AS_TARGETS } from './src/lib/orgPermissions.ts';
+import { resolveOrgAccess, scopedTeamNames, FEEDBACK_INBOX_EMAILS, RECOGNITION_MANAGER_EMAILS, VIEW_AS_TARGETS } from './src/lib/orgPermissions.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -340,7 +340,7 @@ export async function createApp() {
       primaryTeam: access.primaryTeam,
       secondaryTeams: access.secondaryTeams,
       canSeeFeedback: FEEDBACK_INBOX_EMAILS.includes(session.email),
-      canManageRecognitions: FEEDBACK_INBOX_EMAILS.includes(session.email),
+      canManageRecognitions: RECOGNITION_MANAGER_EMAILS.includes(session.email),
       isViewingAs: effective.isViewingAs,
       canUseViewAs,
       viewAsOptions: canUseViewAs ? VIEW_AS_TARGETS : [],
@@ -553,7 +553,7 @@ export async function createApp() {
 
   function requireRecognitionManager(req: Request, res: Response, next: NextFunction) {
     const session = (req as any).session as SignedSession;
-    if (!FEEDBACK_INBOX_EMAILS.includes(session.email)) {
+    if (!RECOGNITION_MANAGER_EMAILS.includes(session.email)) {
       return res.status(403).json({ error: 'No tienes permiso para gestionar reconocimientos.' });
     }
     next();
@@ -574,7 +574,7 @@ export async function createApp() {
 
   app.get('/api/recognitions/launch-request', async (req, res) => {
     const session = (req as any).session as SignedSession;
-    if (session.email !== 'santiago@toroto.mx' && !FEEDBACK_INBOX_EMAILS.includes(session.email)) {
+    if (session.email !== 'santiago@toroto.mx' && !RECOGNITION_MANAGER_EMAILS.includes(session.email)) {
       return res.status(403).json({ error: 'No tienes acceso a esta información.' });
     }
     const request = await loadLaunchRequest();

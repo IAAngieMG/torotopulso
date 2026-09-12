@@ -22,8 +22,11 @@ export const VISION_GLOBAL_EMAILS = [
   'karla@toroto.mx',
 ];
 
-/** Karla y Angie manejan el buzón de feedback interno y el módulo de Reconocimientos. */
-export const FEEDBACK_INBOX_EMAILS = ['karla@toroto.mx', 'ti@toroto.mx'];
+/** Únicas cuentas que pueden ver el buzón de feedback interno ("Feedback recibido"). */
+export const FEEDBACK_INBOX_EMAILS = ['karla@toroto.mx', 'samantha@toroto.mx', 'ti@toroto.mx'];
+
+/** Karla y Angie son quienes generan, aprueban y publican los diplomas de Reconocimientos. */
+export const RECOGNITION_MANAGER_EMAILS = ['karla@toroto.mx', 'ti@toroto.mx'];
 
 /** Perfiles fijos que Angie (ti@toroto.mx) puede simular con "Ver como", sin tocar su sesión real. */
 export const VIEW_AS_TARGETS = [
