@@ -62,7 +62,6 @@ export default function App() {
           onSetViewAs={setViewAs}
           onOpenTeam={team => setView({ name: 'team', team })}
           onOpenPerson={email => setView({ name: 'person', email })}
-          onOpenFeedback={() => setView({ name: 'feedback' })}
           onOpenRecognitions={() => setView({ name: 'recognitions' })}
         />
       )}

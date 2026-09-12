@@ -125,18 +125,14 @@ export function TopBar({ me, extra, onSetViewAs }: { me: Me; extra?: ReactNode; 
 
 export function ReconocimientosCard({
   onOpenRecognitions,
-  onOpenFeedback,
-  canSeeFeedback,
   isManager,
 }: {
   onOpenRecognitions: () => void;
-  onOpenFeedback: () => void;
-  canSeeFeedback: boolean;
   isManager: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-toroto-border bg-white p-4 flex items-center justify-between gap-3 flex-wrap">
-      <button onClick={onOpenRecognitions} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
+    <div className="rounded-xl border border-toroto-border bg-white p-4">
+      <button onClick={onOpenRecognitions} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity w-full">
         <div className="w-9 h-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
           <Award size={16} className="text-amber-600" />
         </div>
@@ -147,14 +143,6 @@ export function ReconocimientosCard({
           </p>
         </div>
       </button>
-      {canSeeFeedback && (
-        <button
-          onClick={onOpenFeedback}
-          className="text-sm font-medium text-toroto-primary hover:underline flex items-center gap-1"
-        >
-          <MessageCircleHeart size={14} /> Ver feedback
-        </button>
-      )}
     </div>
   );
 }

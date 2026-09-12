@@ -17,7 +17,7 @@ export default function FeedbackInbox({ me }: { me: Me }) {
       <TopBar me={me} />
       <div className="p-4 md:p-8 max-w-3xl">
         <h2 className="font-display text-lg font-semibold mb-1">Feedback recibido</h2>
-        <p className="text-sm text-slate-500 mb-6">Solo visible para Karla y Angie. No se comparte con el resto de la tropa.</p>
+        <p className="text-sm text-slate-500 mb-6">Solo visible para Karla, Samantha y Angie. No se comparte con el resto de la tropa.</p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!entries && !error && <p className="text-sm text-slate-500">Cargando…</p>}
         {entries?.length === 0 && <p className="text-sm text-slate-500">Todavía no hay feedback registrado.</p>}

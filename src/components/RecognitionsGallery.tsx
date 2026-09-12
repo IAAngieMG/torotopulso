@@ -55,7 +55,7 @@ function LaunchScheduler() {
         <p className="font-display font-semibold text-sm">Programador de lanzamiento</p>
       </div>
       <p className="text-xs text-slate-500">
-        Programa cuándo se lanza el próximo ciclo de reconocimientos. Angie y Karla recibirán la solicitud para generar y aprobar los diplomas.
+        Programa cuándo se lanza el próximo ciclo de reconocimientos. Angie, Karla y Samantha recibirán la solicitud para generar y aprobar los diplomas.
       </p>
       <input
         value={label}
@@ -83,7 +83,7 @@ function LaunchScheduler() {
           Próximo disparo programado: <strong>{new Date(existing.scheduledFor).toLocaleString('es-MX')}</strong> · "{existing.label}"
         </p>
       )}
-      {status === 'sent' && <p className="text-xs text-emerald-600">Listo — Angie y Karla ya pueden verla.</p>}
+      {status === 'sent' && <p className="text-xs text-emerald-600">Listo — Angie, Karla y Samantha ya pueden verla.</p>}
       {status === 'error' && <p className="text-xs text-red-600">No se pudo enviar la solicitud.</p>}
     </div>
   );

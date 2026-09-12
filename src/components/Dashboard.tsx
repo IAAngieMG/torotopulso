@@ -21,11 +21,10 @@ interface DashboardProps {
   onSetViewAs: (email: string) => void;
   onOpenTeam: (team: string) => void;
   onOpenPerson: (email: string) => void;
-  onOpenFeedback: () => void;
   onOpenRecognitions: () => void;
 }
 
-export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, onOpenFeedback, onOpenRecognitions }: DashboardProps) {
+export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, onOpenRecognitions }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('general');
   const isVisionGlobal = me.visionGlobal;
 
@@ -33,14 +32,7 @@ export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, o
     <div>
       <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
-        {isVisionGlobal && (
-          <ReconocimientosCard
-            onOpenRecognitions={onOpenRecognitions}
-            onOpenFeedback={onOpenFeedback}
-            canSeeFeedback={me.canSeeFeedback}
-            isManager={me.canManageRecognitions}
-          />
-        )}
+        {isVisionGlobal && <ReconocimientosCard onOpenRecognitions={onOpenRecognitions} isManager={me.canManageRecognitions} />}
 
         {isVisionGlobal && (
           <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">
