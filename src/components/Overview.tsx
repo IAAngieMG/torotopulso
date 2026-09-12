@@ -68,9 +68,9 @@ export default function Overview({ me, onOpenTeam }: { me: Me; onOpenTeam: (team
 
   const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
-  // Arranca siempre en "Mi equipo": el equipo propio si lo hay, o vacío (= toda la tropa) para
-  // quien no tiene uno (no debería pasar salvo un correo mal configurado).
-  const [activeTeam, setActiveTeam] = useState<string>(me.primaryTeam || '');
+  // Arranca siempre en "General" (todo el alcance) para quien tiene el toggle; quien no lo tiene
+  // (un solo equipo) igual arranca vacío, que en su caso equivale a su único equipo.
+  const [activeTeam, setActiveTeam] = useState<string>('');
   const [data, setData] = useState<OverviewData | null>(null);
   const [error, setError] = useState('');
 
