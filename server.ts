@@ -630,17 +630,37 @@ export async function createApp() {
   app.post('/api/recognitions/:id/approve', requireRecognitionManager, async (req, res) => {
     const session = (req as any).session as SignedSession;
     const id = clean(req.params.id, 200);
-    const records = await loadRecognitionRecords();
-    const record = records[id];
-    if (!record) return res.status(404).json({ error: 'Primero genera el diploma con IA.' });
     const nomineeName = clean(req.body?.nomineeName, 200);
+    if (!nomineeName) return res.status(400).json({ error: 'Escribe el nombre de la persona reconocida antes de aprobar.' });
+    const records = await loadRecognitionRecords();
+    // Permite aprobar directamente, sin pasar antes por "Generar con IA" — útil mientras el
+    // Sheet de nominaciones no está conectado y se captura todo a mano.
+    let record = records[id];
+    if (!record) {
+      const nominations = await fetchNominations();
+      const nomination = nominations.find(n => n.id === id);
+      if (!nomination) return res.status(404).json({ error: 'Nominación no encontrada.' });
+      record = {
+        id,
+        month: nomination.month || currentRecognitionMonth(),
+        nominatorName: nomination.nominatorName,
+        nominatorEmail: nomination.nominatorEmail,
+        rawText: nomination.rawText,
+        nomineeName: '',
+        nomineeRole: '',
+        diplomaText: '',
+        tone: 'calido',
+        status: 'pendiente',
+      };
+    }
     const nomineeRole = clean(req.body?.nomineeRole, 200);
     const diplomaText = clean(req.body?.diplomaText, 1500);
-    if (nomineeName) record.nomineeName = nomineeName;
+    record.nomineeName = nomineeName;
     if (req.body?.nomineeRole !== undefined) record.nomineeRole = nomineeRole;
     if (diplomaText) record.diplomaText = diplomaText;
     record.status = 'aprobado';
     record.reviewedBy = session.email;
+    records[id] = record;
     await saveRecognitionRecords(records);
     res.json({ record });
   });
