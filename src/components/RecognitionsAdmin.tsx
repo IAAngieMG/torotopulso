@@ -190,7 +190,15 @@ function NominationCard({ nomination, onChanged }: NominationCardProps) {
   );
 }
 
-export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () => void }) {
+export default function RecognitionsAdmin({
+  me,
+  onSetViewAs,
+  onBack,
+}: {
+  me: Me;
+  onSetViewAs?: (email: string) => void;
+  onBack: () => void;
+}) {
   const [month, setMonth] = useState('');
   const [pending, setPending] = useState<Nomination[] | null>(null);
   const [error, setError] = useState('');
@@ -225,7 +233,7 @@ export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () =
 
   return (
     <div>
-      <TopBar me={me} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-3xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver

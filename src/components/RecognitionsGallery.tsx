@@ -11,8 +11,6 @@ import {
 import { TopBar } from './Shell.tsx';
 import DiplomaCard from './DiplomaCard.tsx';
 
-const PREVIEW_NAMES = ['Santiago', 'Ane', 'Patricia'];
-
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 /** Últimos `n` meses (incluyendo el actual) en el mismo formato "Mes AAAA" que usa el backend. */
@@ -116,12 +114,19 @@ function BotPreviewCard({ month }: { month: string }) {
   );
 }
 
-export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: () => void }) {
+export default function RecognitionsGallery({
+  me,
+  onSetViewAs,
+  onBack,
+}: {
+  me: Me;
+  onSetViewAs?: (email: string) => void;
+  onBack: () => void;
+}) {
   const [month, setMonth] = useState('');
   const [diplomas, setDiplomas] = useState<RecognitionRecord[] | null>(null);
   const [error, setError] = useState('');
   const [index, setIndex] = useState(0);
-  const [previewAs, setPreviewAs] = useState('');
   const [showHistory, setShowHistory] = useState(false);
 
   const loadMonth = (targetMonth?: string) => {
@@ -139,13 +144,14 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
     loadMonth();
   }, []);
 
-  const displayName = previewAs || me.name;
   const current = diplomas?.[index];
-  const isSantiago = me.email === 'santiago@toroto.mx' || previewAs === 'Santiago';
+  const isSantiago = me.email === 'santiago@toroto.mx';
+  const isPatricia = me.email === 'patricia@toroto.mx';
+  const isEnhanced = isSantiago || isPatricia;
 
   return (
     <div>
-      <TopBar me={{ ...me, name: displayName }} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} />
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -153,46 +159,31 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
           .print-diploma-area { position: absolute; inset: 0; }
         }
       `}</style>
-      <div className={`p-4 md:p-8 space-y-6 ${isSantiago ? 'max-w-4xl' : 'max-w-2xl'}`}>
+      <div className={`p-4 md:p-8 space-y-6 ${isEnhanced ? 'max-w-4xl' : 'max-w-2xl'}`}>
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 print:hidden">
           <ArrowLeft size={14} /> Volver
         </button>
 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            {isSantiago && (
+            {isEnhanced && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 mb-1.5">
                 Ciclo de reconocimientos · Edición {month}
               </span>
             )}
             <h2 className="font-display text-lg font-semibold">
-              {isSantiago ? 'Reconocimientos del Mes · Programa y Celebra el Talento' : `Reconocimientos del mes · ${month}`}
+              {isEnhanced ? 'Reconocimientos del Mes · Programa y Celebra el Talento' : `Reconocimientos del mes · ${month}`}
             </h2>
             <p className="text-sm text-slate-500">Diplomas publicados para toda la tropa.</p>
           </div>
           <div className="flex items-center gap-2">
-            {isSantiago && (
+            {isEnhanced && (
               <button
                 onClick={() => setShowHistory(v => !v)}
                 className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg border border-toroto-border px-3 py-2 bg-white hover:bg-slate-50"
               >
                 <History size={13} /> Ver historial
               </button>
-            )}
-            {me.canManageRecognitions && (
-              <select
-                value={previewAs}
-                onChange={e => setPreviewAs(e.target.value)}
-                className="text-xs rounded-lg border border-toroto-border px-2.5 py-1.5 bg-white"
-                title="Ver esta pantalla como otro perfil, solo para verificar"
-              >
-                <option value="">Ver como tú misma</option>
-                {PREVIEW_NAMES.map(n => (
-                  <option key={n} value={n}>
-                    Ver como {n}
-                  </option>
-                ))}
-              </select>
             )}
           </div>
         </div>
@@ -214,12 +205,15 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
           </div>
         )}
 
-        {isSantiago && (
-          <div className="grid md:grid-cols-2 gap-4">
-            <LaunchScheduler />
+        {isEnhanced &&
+          (isSantiago ? (
+            <div className="grid md:grid-cols-2 gap-4">
+              <LaunchScheduler />
+              <BotPreviewCard month={month} />
+            </div>
+          ) : (
             <BotPreviewCard month={month} />
-          </div>
-        )}
+          ))}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!diplomas && !error && <p className="text-sm text-slate-500">Cargando…</p>}
@@ -231,7 +225,7 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
 
         {current && (
           <div className="rounded-xl border border-toroto-border bg-white p-6">
-            {isSantiago && (
+            {isEnhanced && (
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4 print:hidden">
                 <p className="font-display font-semibold text-sm">🏆 Diplomas del mes de {month}</p>
                 <button

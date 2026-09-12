@@ -17,11 +17,13 @@ type View =
   | { name: 'recognitions' };
 
 export default function App() {
-  // `realMe` es siempre la cuenta que inició sesión de verdad — gobierna el shell, Reconocimientos
-  // y Feedback. `effectiveMe` es lo que debe verse dentro del dashboard de pulso: igual a `realMe`
-  // normalmente, o el perfil que Angie está simulando con "Ver como" (src/lib/orgPermissions.ts).
-  const [realMe, setRealMe] = useState<Me | null>(null);
-  const [effectiveMe, setEffectiveMe] = useState<Me | null>(null);
+  // `me` es siempre lo que debe verse en pantalla: la cuenta real, o el perfil que Angie está
+  // simulando con "Ver como" (src/lib/orgPermissions.ts) — el backend calcula todo (alcance,
+  // canSeeFeedback, canManageRecognitions) para esa identidad efectiva. `canUseViewAs` y
+  // `viewAsOptions` son la única excepción: el backend los calcula siempre a partir de la
+  // sesión real, para que el control "Ver como" siga visible aunque se esté viendo como otra
+  // persona.
+  const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
   const [view, setView] = useState<View>({ name: 'overview' });
@@ -32,10 +34,7 @@ export default function App() {
       return;
     }
     api('/api/me')
-      .then(m => {
-        setRealMe(m);
-        setEffectiveMe(m);
-      })
+      .then(setMe)
       .catch(e => {
         localStorage.removeItem(TOKEN_KEY);
         setAuthError(e.message);
@@ -46,24 +45,20 @@ export default function App() {
   const setViewAs = (email: string) => {
     setViewAsEmail(email);
     setView({ name: 'overview' });
-    if (!email) {
-      setEffectiveMe(realMe);
-      return;
-    }
     api('/api/me')
-      .then(setEffectiveMe)
+      .then(setMe)
       .catch(() => {});
   };
 
   if (loading) return null;
-  if (!realMe || !effectiveMe) return <Login initialError={authError} />;
+  if (!me) return <Login initialError={authError} />;
 
   return (
-    <Shell me={realMe} view={view.name} onNavigate={name => setView({ name } as View)}>
+    <Shell me={me} view={view.name} onNavigate={name => setView({ name } as View)}>
       {view.name === 'overview' && (
         <Dashboard
-          key={effectiveMe.email}
-          me={effectiveMe}
+          key={me.email}
+          me={me}
           onSetViewAs={setViewAs}
           onOpenTeam={team => setView({ name: 'team', team })}
           onOpenPerson={email => setView({ name: 'person', email })}
@@ -73,7 +68,7 @@ export default function App() {
       )}
       {view.name === 'team' && (
         <TeamDetail
-          me={effectiveMe}
+          me={me}
           onSetViewAs={setViewAs}
           team={view.team}
           onBack={() => setView({ name: 'overview' })}
@@ -81,14 +76,14 @@ export default function App() {
         />
       )}
       {view.name === 'person' && (
-        <PersonDetail me={effectiveMe} onSetViewAs={setViewAs} email={view.email} onBack={() => setView({ name: 'overview' })} />
+        <PersonDetail me={me} onSetViewAs={setViewAs} email={view.email} onBack={() => setView({ name: 'overview' })} />
       )}
-      {view.name === 'feedback' && realMe.canSeeFeedback && <FeedbackInbox me={realMe} />}
+      {view.name === 'feedback' && me.canSeeFeedback && <FeedbackInbox me={me} />}
       {view.name === 'recognitions' &&
-        (realMe.canManageRecognitions ? (
-          <RecognitionsAdmin me={realMe} onBack={() => setView({ name: 'overview' })} />
+        (me.canManageRecognitions ? (
+          <RecognitionsAdmin me={me} onSetViewAs={setViewAs} onBack={() => setView({ name: 'overview' })} />
         ) : (
-          <RecognitionsGallery me={realMe} onBack={() => setView({ name: 'overview' })} />
+          <RecognitionsGallery me={me} onSetViewAs={setViewAs} onBack={() => setView({ name: 'overview' })} />
         ))}
     </Shell>
   );
