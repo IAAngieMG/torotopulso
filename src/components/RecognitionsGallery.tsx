@@ -80,7 +80,7 @@ export default function RecognitionsGallery({ me, onBack }: { me: Me; onBack: ()
 
   return (
     <div>
-      <TopBar name={displayName} />
+      <TopBar me={{ ...me, name: displayName }} />
       <div className="p-4 md:p-8 space-y-6 max-w-2xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver

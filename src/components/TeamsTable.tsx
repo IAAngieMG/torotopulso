@@ -6,7 +6,14 @@ import { RangeSignalControls } from './PulseWidgets.tsx';
 const TREND_ICON = { up: ArrowUp, down: ArrowDown, flat: Minus } as const;
 const TREND_COLOR = { up: 'text-emerald-600', down: 'text-red-500', flat: 'text-slate-400' } as const;
 
-export default function TeamsTable({ onOpenTeam }: { onOpenTeam: (team: string) => void }) {
+export default function TeamsTable({
+  onOpenTeam,
+  primaryTeam,
+}: {
+  onOpenTeam: (team: string) => void;
+  /** Cuando se pasa, se muestra la etiqueta TU EQUIPO/SECUNDARIO en cada fila (líderes, no visión global). */
+  primaryTeam?: string | null;
+}) {
   const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
@@ -51,7 +58,20 @@ export default function TeamsTable({ onOpenTeam }: { onOpenTeam: (team: string) 
                 return (
                   <tr key={t.team} className="border-b border-toroto-border last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-[#0b1c30]">{t.team}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-[#0b1c30]">{t.team}</p>
+                        {primaryTeam !== undefined && (
+                          <span
+                            className={`text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 ${
+                              t.team === primaryTeam
+                                ? 'bg-toroto-primary-light text-toroto-primary border border-toroto-primary/30'
+                                : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {t.team === primaryTeam ? 'Tu equipo' : 'Secundario'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-400">{t.leader}</p>
                     </td>
                     <td className="px-4 py-3">{t.kpis.bdAverage != null ? `${t.kpis.bdAverage.toFixed(1)}/5` : '—'}</td>

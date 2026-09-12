@@ -6,23 +6,18 @@ import type { Request, Response, NextFunction } from 'express';
 import { getStore } from '@netlify/blobs';
 import { GoogleGenAI } from '@google/genai';
 import { signSession, verifySession, type SignedSession } from './src/lib/sessionToken.ts';
-import { fetchAllSheets, fetchSheetRows } from './src/lib/sheets.ts';
+import { fetchSheetRows } from './src/lib/sheets.ts';
 import { parseNominations, type Nomination } from './src/lib/recognitionData.ts';
 import {
-  parseGrupos,
-  parseGruposDetalle,
-  parseFiltroEspecial,
-  parseSlackId,
   parseRespuestas,
   parsePreguntas,
   currentQuestionFor,
   isFridaySignal,
-  type Team,
-  type SubTeam,
   type ResponseRecord,
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
-import { resolveAccess, FEEDBACK_INBOX_EMAILS, type AccessResult } from './src/lib/permissions.ts';
+import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, teamByName, guessNomineeRole } from './src/lib/orgChart.ts';
+import { resolveOrgAccess, scopedTeamNames, FEEDBACK_INBOX_EMAILS, VIEW_AS_TARGETS } from './src/lib/orgPermissions.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -31,7 +26,6 @@ import {
   inRange,
   type RangeFilter,
 } from './src/lib/scoring.ts';
-import { buildEmailToTeams } from './src/lib/teamLookup.ts';
 
 const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
 
@@ -49,15 +43,10 @@ function verifySessionToken(token: string) {
   return verifySession(token, sessionSecret);
 }
 
-// --- Sheet data cache -------------------------------------------------------
+// --- Sheet data cache --------------------------------------------------------
+// El organigrama (equipos, líderes, permisos) ya no vive en el Sheet — es estático, ver
+// src/lib/orgChart.ts. Solo `Respuestas` y `Preguntas` siguen viniendo en vivo del Sheet.
 interface PulseData {
-  teams: Team[];
-  subTeams: SubTeam[];
-  filtroEspecial: Map<string, string[]>;
-  slackByName: Map<string, string>;
-  slackByEmail: Map<string, string>;
-  firstNameByEmail: Map<string, string>;
-  emailToTeams: Map<string, string[]>;
   responses: ResponseRecord[];
   preguntas: QuestionTemplate[];
 }
@@ -70,16 +59,13 @@ async function loadPulseData(): Promise<PulseData> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.data;
   if (!inflight) {
     inflight = (async () => {
-      const sheets = await fetchAllSheets(SHEET_ID);
-      const teams = parseGrupos(sheets.grupos);
-      const subTeams = parseGruposDetalle(sheets.gruposDetalle);
-      const filtroEspecial = parseFiltroEspecial(sheets.filtroEspecial);
-      const { byName: slackByName, byEmail: slackByEmail, firstNameByEmail } = parseSlackId(sheets.slackId);
-      const responses = parseRespuestas(sheets.respuestas);
-      const preguntas = parsePreguntas(sheets.preguntas);
-      const emailToTeams = buildEmailToTeams(teams, slackByName);
+      const [respuestasRows, preguntasRows] = await Promise.all([
+        fetchSheetRows(SHEET_ID, 'Respuestas'),
+        fetchSheetRows(SHEET_ID, 'Preguntas'),
+      ]);
       const data: PulseData = {
-        teams, subTeams, filtroEspecial, slackByName, slackByEmail, firstNameByEmail, emailToTeams, responses, preguntas,
+        responses: parseRespuestas(respuestasRows),
+        preguntas: parsePreguntas(preguntasRows),
       };
       cache = { data, fetchedAt: Date.now() };
       return data;
@@ -96,13 +82,19 @@ function applySignalFilter(records: ResponseRecord[], signal: string): ResponseR
   return upper === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === upper);
 }
 
-function accessFor(data: PulseData, email: string): AccessResult {
-  return resolveAccess(email, data.slackByEmail, data.teams, data.subTeams, data.filtroEspecial);
-}
-
-/** Team names an access grant actually covers, expanded to every real team when scope is "all". */
-function scopedTeamNames(access: AccessResult, allTeams: Team[]): string[] {
-  return access.dataScope === 'all' ? allTeams.map(t => t.name) : access.dataScope;
+/**
+ * Identidad "efectiva" para las rutas de pulso: normalmente la del token de sesión, pero si
+ * Angie (ti@toroto.mx) mandó el header `X-View-As` con uno de los perfiles permitidos, se
+ * calculan alcance y saludo como si fuera esa persona — sin tocar su sesión real. Feedback y
+ * Reconocimientos ignoran esto a propósito y siempre usan la sesión real.
+ */
+function effectiveIdentity(req: Request, session: SignedSession): { email: string; name: string; isViewingAs: boolean } {
+  const viewAs = clean(req.header('x-view-as') || '', 320).toLowerCase();
+  const target = viewAs && VIEW_AS_TARGETS.find(t => t.email === viewAs);
+  if (target && session.email === 'ti@toroto.mx') {
+    return { email: target.email, name: firstNameFor(target.email) || target.label, isViewingAs: true };
+  }
+  return { email: session.email, name: session.name, isViewingAs: false };
 }
 
 // --- Netlify Blobs (feedback storage), with the same fallback we needed in Auditor Toroto ---
@@ -163,17 +155,6 @@ interface RecognitionRecord {
   status: RecognitionStatus;
   reviewedBy?: string;
   publishedAt?: string;
-}
-
-/** Si el nombre extraído por la IA coincide con alguien real del roster, usa su equipo como "rol". */
-function guessNomineeRole(nomineeName: string, data: PulseData): string {
-  if (!nomineeName) return '';
-  const target = nomineeName.trim().toLowerCase();
-  for (const team of data.teams) {
-    if (team.leaderName.toLowerCase() === target) return `Líder, ${team.name}`;
-    if (team.members.some(m => m.toLowerCase() === target)) return team.name;
-  }
-  return '';
 }
 
 const recognitionsFile = path.resolve(process.env.RECOGNITIONS_FILE || './data/pulso-recognitions.json');
@@ -328,15 +309,14 @@ export async function createApp() {
         return res.status(403).json({ error: `Acceso restringido: el correo ${email} no pertenece al dominio @toroto.mx.` });
       }
 
-      const data = await loadPulseData();
-      const access = accessFor(data, email);
+      const access = resolveOrgAccess(email);
       if (!access.granted) {
         return res.status(403).json({
-          error: 'Tu cuenta no tiene un rol de liderazgo asignado en Pulso Toroto. Pide que te agreguen en la hoja de Grupos o Filtro especial.',
+          error: 'Tu cuenta no tiene un rol de liderazgo asignado en Pulso Toroto. Pide que te agreguen al organigrama.',
         });
       }
 
-      const displayName = data.firstNameByEmail.get(email) || name.split(' ')[0] || email.split('@')[0];
+      const displayName = firstNameFor(email) || name.split(' ')[0] || email.split('@')[0];
       const session: SignedSession = { email, name: displayName, expiresAt: Date.now() + 8 * 3600000 };
       res.json({ sessionToken: createSessionToken(session) });
     } catch (error: any) {
@@ -348,35 +328,40 @@ export async function createApp() {
 
   app.get('/api/me', async (req, res) => {
     const session = (req as any).session as SignedSession;
-    const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const effective = effectiveIdentity(req, session);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+    const canUseViewAs = session.email === 'ti@toroto.mx';
     res.json({
-      email: session.email,
-      name: session.name,
-      role: access.dataScope === 'all' ? 'ejecutivo' : 'lider',
-      teams: scopedTeamNames(access, data.teams),
-      canSeeFeedback: access.canSeeFeedback,
+      email: effective.email,
+      name: effective.name,
+      visionGlobal: access.visionGlobal,
+      teams: scopedTeamNames(access),
+      primaryTeam: access.primaryTeam,
+      secondaryTeams: access.secondaryTeams,
+      canSeeFeedback: FEEDBACK_INBOX_EMAILS.includes(session.email),
       canManageRecognitions: FEEDBACK_INBOX_EMAILS.includes(session.email),
+      isViewingAs: effective.isViewingAs,
+      canUseViewAs,
+      viewAsOptions: canUseViewAs ? VIEW_AS_TARGETS : [],
     });
   });
 
   app.get('/api/pulse/overview', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
     const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
-    const myTeams = scopedTeamNames(access, data.teams);
+    const myTeams = scopedTeamNames(access);
     const requestedTeam = clean(req.query.team as string, 200);
     if (requestedTeam && !myTeams.includes(requestedTeam)) {
       return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
     }
     const teamsInScope = requestedTeam ? [requestedTeam] : myTeams;
     const rosterEmails = new Set<string>();
-    for (const [email, teams] of data.emailToTeams) {
-      if (teams.some(t => teamsInScope.includes(t))) rosterEmails.add(email);
-    }
+    for (const t of teamsInScope) for (const e of rosterEmailsForTeam(t)) rosterEmails.add(e);
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string).toUpperCase() || 'ALL';
@@ -403,17 +388,17 @@ export async function createApp() {
 
   app.get('/api/pulse/teams-summary', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
     const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string) || 'ALL';
-    const myTeams = scopedTeamNames(access, data.teams);
+    const myTeams = scopedTeamNames(access);
     const summary = myTeams.map(teamName => {
-      const team = data.teams.find(t => t.name === teamName)!;
-      const rosterEmails = new Set<string>();
-      for (const [email, teams] of data.emailToTeams) if (teams.includes(teamName)) rosterEmails.add(email);
+      const team = teamByName(teamName)!;
+      const rosterEmails = new Set(rosterEmailsForTeam(teamName));
       const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
       const previous = applySignalFilter(
         data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range: range === 'week' ? 'lastWeek' : range })),
@@ -429,31 +414,31 @@ export async function createApp() {
               ? 'down'
               : 'flat'
           : 'flat';
-      return { team: team.name, leader: team.leaderName, kpis, trend };
+      return { team: team.name, leader: team.leader.name, kpis, trend };
     });
-    res.json({ teams: summary });
+    res.json({ teams: summary, primaryTeam: access.primaryTeam, secondaryTeams: access.secondaryTeams });
   });
 
   app.get('/api/pulse/people', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
     const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string) || 'ALL';
-    const myTeams = scopedTeamNames(access, data.teams);
+    const myTeams = scopedTeamNames(access);
     const onlyLeaders = clean(req.query.leaders as string) === 'true';
 
     const people: Array<{ fullName: string; email: string; team: string; isLeader: boolean; kpis: ReturnType<typeof computeKpis> }> = [];
-    for (const team of data.teams) {
+    for (const team of ORG_TEAMS) {
       if (!myTeams.includes(team.name)) continue;
-      const roster = onlyLeaders ? [team.leaderName] : [team.leaderName, ...team.members];
-      for (const fullName of roster) {
-        const email = data.slackByName.get(fullName);
-        if (!email) continue;
-        const records = applySignalFilter(data.responses.filter(r => r.email === email && inRange(r, { range })), signal);
-        people.push({ fullName, email, team: team.name, isLeader: fullName === team.leaderName, kpis: computeKpis(records, 1) });
+      const roster = onlyLeaders ? [team.leader] : [team.leader, ...team.members];
+      for (const person of roster) {
+        if (!person.email) continue;
+        const records = applySignalFilter(data.responses.filter(r => r.email === person.email && inRange(r, { range })), signal);
+        people.push({ fullName: person.name, email: person.email, team: team.name, isLeader: person === team.leader, kpis: computeKpis(records, 1) });
       }
     }
     res.json({ people });
@@ -461,31 +446,29 @@ export async function createApp() {
 
   app.get('/api/pulse/team/:team', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
     const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const teamName = clean(req.params.team, 200);
-    const myTeams = scopedTeamNames(access, data.teams);
+    const myTeams = scopedTeamNames(access);
     if (!myTeams.includes(teamName)) return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
 
-    const team = data.teams.find(t => t.name === teamName);
+    const team = teamByName(teamName);
     if (!team) return res.status(404).json({ error: 'Equipo no encontrado.' });
 
-    const memberNames = [team.leaderName, ...team.members];
-    const members = memberNames
-      .map(fullName => {
-        const email = data.slackByName.get(fullName);
-        if (!email) return null;
-        const personRecords = data.responses.filter(r => r.email === email && inRange(r, { range: 'week' }));
+    const members = [team.leader, ...team.members]
+      .filter(person => person.email)
+      .map(person => {
+        const personRecords = data.responses.filter(r => r.email === person.email && inRange(r, { range: 'week' }));
         return {
-          fullName,
-          email,
-          isLeader: fullName === team.leaderName,
+          fullName: person.name,
+          email: person.email as string,
+          isLeader: person === team.leader,
           weeklyKpis: computeKpis(personRecords, 1),
         };
-      })
-      .filter((m): m is NonNullable<typeof m> => m !== null);
+      });
 
     const rosterEmails = new Set(members.map(m => m.email));
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
@@ -494,7 +477,7 @@ export async function createApp() {
 
     res.json({
       team: team.name,
-      leader: team.leaderName,
+      leader: team.leader.name,
       kpis: computeKpis(records, rosterEmails.size),
       weeklySeries: computeWeeklySeries(records, new Date(), range),
       energyDistribution: computeEnergyDistribution(records),
@@ -504,14 +487,15 @@ export async function createApp() {
 
   app.get('/api/pulse/person/:email', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
     const data = await loadPulseData();
-    const access = accessFor(data, session.email);
+    const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const targetEmail = clean(req.params.email, 320).toLowerCase();
-    const myTeams = scopedTeamNames(access, data.teams);
-    const personTeams = data.emailToTeams.get(targetEmail) || [];
-    const isSelf = targetEmail === session.email;
+    const myTeams = scopedTeamNames(access);
+    const personTeams = ORG_TEAMS.filter(t => t.leader.email === targetEmail || t.members.some(mem => mem.email === targetEmail)).map(t => t.name);
+    const isSelf = targetEmail === effective.email;
     if (!isSelf && !personTeams.some(t => myTeams.includes(t))) {
       return res.status(403).json({ error: 'No tienes acceso a esta persona.' });
     }
@@ -525,7 +509,7 @@ export async function createApp() {
 
     res.json({
       email: targetEmail,
-      fullName: data.slackByEmail.get(targetEmail) || '',
+      fullName: fullNameFor(targetEmail),
       teams: personTeams,
       kpis: computeKpis(records, 1),
       responses: records,
@@ -623,7 +607,6 @@ export async function createApp() {
       if (!nomination) return res.status(404).json({ error: 'Nominación no encontrada.' });
 
       const { nomineeName, diplomaText } = await generateDiplomaWithAI(nomination.rawText, tone);
-      const pulseData = await loadPulseData();
       const records = await loadRecognitionRecords();
       records[id] = {
         id,
@@ -632,7 +615,7 @@ export async function createApp() {
         nominatorEmail: nomination.nominatorEmail,
         rawText: nomination.rawText,
         nomineeName,
-        nomineeRole: guessNomineeRole(nomineeName, pulseData),
+        nomineeRole: guessNomineeRole(nomineeName),
         diplomaText,
         tone,
         status: 'generado',

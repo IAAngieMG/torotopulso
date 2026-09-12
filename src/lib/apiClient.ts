@@ -2,9 +2,19 @@ import type { RangeOption } from './scoring.ts';
 
 export const TOKEN_KEY = 'pulsoTorotoSession';
 
+/** Correo que Angie (ti@toroto.mx) está simulando con "Ver como" — vacío si ve su propia vista. */
+let viewAsEmail = '';
+export function setViewAsEmail(email: string) {
+  viewAsEmail = email;
+}
+export function getViewAsEmail() {
+  return viewAsEmail;
+}
+
 const headers = () => ({
   Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ''}`,
   'Content-Type': 'application/json',
+  ...(viewAsEmail ? { 'X-View-As': viewAsEmail } : {}),
 });
 
 export async function api(url: string, options: RequestInit = {}) {
@@ -19,13 +29,27 @@ export async function api(url: string, options: RequestInit = {}) {
   return d;
 }
 
+export interface ViewAsOption {
+  email: string;
+  label: string;
+}
+
 export interface Me {
   email: string;
   name: string;
-  role: 'ejecutivo' | 'lider';
+  visionGlobal: boolean;
   teams: string[];
+  /** Equipo propio para la vista "Mi equipo" — null si la persona no aparece en el organigrama. */
+  primaryTeam: string | null;
+  /** Equipos adicionales a cargo (líderes con acceso ampliado). Vacío si no aplica. */
+  secondaryTeams: string[];
   canSeeFeedback: boolean;
   canManageRecognitions: boolean;
+  /** "Ver como": true mientras se está viendo el dashboard como otro perfil. */
+  isViewingAs: boolean;
+  /** Solo true para la cuenta real de Angie — controla si se muestra el selector "Ver como". */
+  canUseViewAs: boolean;
+  viewAsOptions: ViewAsOption[];
 }
 
 export interface Kpis {
@@ -145,7 +169,11 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
 }
 
 export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {
-  return api(`/api/pulse/teams-summary?range=${range}&signal=${signal}`) as Promise<{ teams: TeamSummary[] }>;
+  return api(`/api/pulse/teams-summary?range=${range}&signal=${signal}`) as Promise<{
+    teams: TeamSummary[];
+    primaryTeam: string | null;
+    secondaryTeams: string[];
+  }>;
 }
 
 export function fetchPeople(range: RangeOption, onlyLeaders = false, signal: SignalOption = 'ALL') {

@@ -68,18 +68,57 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
   );
 }
 
-export function TopBar({ name, extra }: { name: string; extra?: ReactNode }) {
+export function TopBar({ me, extra, onSetViewAs }: { me: Me; extra?: ReactNode; onSetViewAs?: (email: string) => void }) {
+  const scopeLine =
+    !me.visionGlobal && me.primaryTeam
+      ? me.secondaryTeams.length > 0
+        ? `Tu equipo: ${me.primaryTeam} · + ${me.secondaryTeams.length} equipo${me.secondaryTeams.length === 1 ? '' : 's'} secundario${me.secondaryTeams.length === 1 ? '' : 's'} a tu cargo`
+        : ''
+      : '';
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-8 py-4 border-b border-toroto-border bg-white">
-      <div>
-        <h1 className="font-display text-xl font-semibold">
-          Hola {name}{' '}
-          <span className="inline-flex items-center gap-1 align-middle text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> En vivo
-          </span>
-        </h1>
+    <div className="border-b border-toroto-border bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-8 py-4">
+        <div>
+          <h1 className="font-display text-xl font-semibold">
+            Hola {me.name}{' '}
+            <span className="inline-flex items-center gap-1 align-middle text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> En vivo
+            </span>
+          </h1>
+          {scopeLine && <p className="text-sm text-slate-500 mt-0.5">{scopeLine}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {extra}
+          {me.canUseViewAs && onSetViewAs && (
+            <select
+              value={me.isViewingAs ? me.email : ''}
+              onChange={e => onSetViewAs(e.target.value)}
+              className="text-xs rounded-lg border border-toroto-border px-2.5 py-1.5 bg-white"
+              title="Ver el dashboard como otro perfil, solo para verificar"
+            >
+              <option value="">Ver como…</option>
+              {me.viewAsOptions.map(o => (
+                <option key={o.email} value={o.email}>
+                  Ver como {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">{extra}</div>
+      {me.isViewingAs && (
+        <div className="px-4 md:px-8 pb-3 -mt-1">
+          <p className="inline-flex flex-wrap items-center gap-2 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+            Viendo como {me.name}
+            {onSetViewAs && (
+              <button onClick={() => onSetViewAs('')} className="underline font-semibold hover:no-underline">
+                Volver a mi vista
+              </button>
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

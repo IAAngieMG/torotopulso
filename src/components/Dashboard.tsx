@@ -18,21 +18,22 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Globe2 }> = [
 
 interface DashboardProps {
   me: Me;
+  onSetViewAs: (email: string) => void;
   onOpenTeam: (team: string) => void;
   onOpenPerson: (email: string) => void;
   onOpenFeedback: () => void;
   onOpenRecognitions: () => void;
 }
 
-export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback, onOpenRecognitions }: DashboardProps) {
+export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, onOpenFeedback, onOpenRecognitions }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('general');
-  const isEjecutivo = me.role === 'ejecutivo';
+  const isVisionGlobal = me.visionGlobal;
 
   return (
     <div>
-      <TopBar name={me.name} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
-        {isEjecutivo && (
+        {isVisionGlobal && (
           <ReconocimientosCard
             onOpenRecognitions={onOpenRecognitions}
             onOpenFeedback={onOpenFeedback}
@@ -41,7 +42,7 @@ export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback
           />
         )}
 
-        {isEjecutivo && (
+        {isVisionGlobal && (
           <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">
             {TABS.map(t => (
               <button
@@ -57,12 +58,12 @@ export default function Dashboard({ me, onOpenTeam, onOpenPerson, onOpenFeedback
           </div>
         )}
 
-        {(!isEjecutivo || tab === 'general') && <Overview me={me} onOpenTeam={onOpenTeam} />}
-        {isEjecutivo && tab === 'equipos' && <TeamsTable onOpenTeam={onOpenTeam} />}
-        {isEjecutivo && tab === 'personas' && <PeopleList onlyLeaders={false} onOpenPerson={onOpenPerson} />}
-        {isEjecutivo && tab === 'lideres' && <PeopleList onlyLeaders onOpenPerson={onOpenPerson} />}
+        {(!isVisionGlobal || tab === 'general') && <Overview me={me} onOpenTeam={onOpenTeam} />}
+        {isVisionGlobal && tab === 'equipos' && <TeamsTable onOpenTeam={onOpenTeam} />}
+        {isVisionGlobal && tab === 'personas' && <PeopleList onlyLeaders={false} onOpenPerson={onOpenPerson} />}
+        {isVisionGlobal && tab === 'lideres' && <PeopleList onlyLeaders onOpenPerson={onOpenPerson} />}
 
-        <FeedbackWidget view={isEjecutivo ? `Resumen · ${tab}` : 'Resumen y Pulso'} />
+        <FeedbackWidget view={isVisionGlobal ? `Resumen · ${tab}` : 'Resumen y Pulso'} />
       </div>
     </div>
   );

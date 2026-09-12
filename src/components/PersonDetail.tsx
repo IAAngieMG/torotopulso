@@ -6,7 +6,17 @@ import { KpiGrid, RangeSignalControls } from './PulseWidgets.tsx';
 
 const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
 
-export default function PersonDetail({ me, email, onBack }: { me: Me; email: string; onBack: () => void }) {
+export default function PersonDetail({
+  me,
+  onSetViewAs,
+  email,
+  onBack,
+}: {
+  me: Me;
+  onSetViewAs: (email: string) => void;
+  email: string;
+  onBack: () => void;
+}) {
   const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<PersonDetailData | null>(null);
@@ -25,7 +35,7 @@ export default function PersonDetail({ me, email, onBack }: { me: Me; email: str
 
   return (
     <div>
-      <TopBar name={me.name} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-3xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver

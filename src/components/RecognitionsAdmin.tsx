@@ -225,7 +225,7 @@ export default function RecognitionsAdmin({ me, onBack }: { me: Me; onBack: () =
 
   return (
     <div>
-      <TopBar name={me.name} />
+      <TopBar me={me} />
       <div className="p-4 md:p-8 space-y-6 max-w-3xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver

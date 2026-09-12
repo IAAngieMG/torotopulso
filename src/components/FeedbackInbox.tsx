@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { fetchFeedbackInbox, type FeedbackEntry } from '../lib/apiClient.ts';
+import { fetchFeedbackInbox, type FeedbackEntry, type Me } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 
-export default function FeedbackInbox({ name }: { name: string }) {
+export default function FeedbackInbox({ me }: { me: Me }) {
   const [entries, setEntries] = useState<FeedbackEntry[] | null>(null);
   const [error, setError] = useState('');
 
@@ -14,7 +14,7 @@ export default function FeedbackInbox({ name }: { name: string }) {
 
   return (
     <div>
-      <TopBar name={name} />
+      <TopBar me={me} />
       <div className="p-4 md:p-8 max-w-3xl">
         <h2 className="font-display text-lg font-semibold mb-1">Feedback recibido</h2>
         <p className="text-sm text-slate-500 mb-6">Solo visible para Karla y Angie. No se comparte con el resto de la tropa.</p>

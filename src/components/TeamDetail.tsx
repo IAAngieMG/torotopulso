@@ -7,12 +7,13 @@ import FeedbackWidget from './FeedbackWidget.tsx';
 
 interface TeamDetailProps {
   me: Me;
+  onSetViewAs: (email: string) => void;
   team: string;
   onBack: () => void;
   onOpenPerson: (email: string) => void;
 }
 
-export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetailProps) {
+export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson }: TeamDetailProps) {
   const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
   const [signal, setSignal] = useState<SignalOption>('ALL');
   const [data, setData] = useState<TeamDetailData | null>(null);
@@ -31,7 +32,7 @@ export default function TeamDetail({ me, team, onBack, onOpenPerson }: TeamDetai
 
   return (
     <div>
-      <TopBar name={me.name} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver a vista general
