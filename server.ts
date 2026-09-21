@@ -16,7 +16,7 @@ import {
   type ResponseRecord,
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
-import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, teamByName, guessNomineeRole } from './src/lib/orgChart.ts';
+import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, rosterForTeams, teamByName, guessNomineeRole } from './src/lib/orgChart.ts';
 import {
   resolveOrgAccess,
   scopedTeamNames,
@@ -26,7 +26,7 @@ import {
   RECOGNITIONS_VIEWER_EMAILS,
   VIEW_AS_MANAGER_EMAILS,
 } from './src/lib/orgPermissions.ts';
-import { computeRedFlagsForPerson, computeRedFlagsForRoster, type RosterPerson } from './src/lib/redFlags.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster } from './src/lib/redFlags.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -83,21 +83,6 @@ async function loadPulseData(): Promise<PulseData> {
     });
   }
   return inflight;
-}
-
-/** Roster de una lista de equipos, sin duplicados, opcionalmente sin la fila de `excludeEmail`. */
-function buildRoster(teamNames: string[], excludeEmail: string | null): RosterPerson[] {
-  const roster: RosterPerson[] = [];
-  const seen = new Set<string>();
-  for (const team of ORG_TEAMS) {
-    if (!teamNames.includes(team.name)) continue;
-    for (const person of [team.leader, ...team.members]) {
-      if (!person.email || seen.has(person.email) || person.email === excludeEmail) continue;
-      seen.add(person.email);
-      roster.push({ email: person.email, fullName: person.name, team: team.name });
-    }
-  }
-  return roster;
 }
 
 function applySignalFilter(records: ResponseRecord[], signal: string): ResponseRecord[] {
@@ -437,7 +422,7 @@ export async function createApp() {
     // Santiago es la única excepción.
     const excludeEmail = effective.email === 'santiago@toroto.mx' ? null : effective.email;
 
-    const roster = buildRoster(teamsInScope, excludeEmail);
+    const roster = rosterForTeams(teamsInScope, { excludeEmail });
     const people = computeRedFlagsForRoster(roster, data.responses, new Date());
     res.json({ people });
   });
@@ -487,16 +472,11 @@ export async function createApp() {
     const myTeams = scopedTeamNames(access);
     const onlyLeaders = clean(req.query.leaders as string) === 'true';
 
-    const people: Array<{ fullName: string; email: string; team: string; isLeader: boolean; kpis: ReturnType<typeof computeKpis> }> = [];
-    for (const team of ORG_TEAMS) {
-      if (!myTeams.includes(team.name)) continue;
-      const roster = onlyLeaders ? [team.leader] : [team.leader, ...team.members];
-      for (const person of roster) {
-        if (!person.email) continue;
-        const records = applySignalFilter(data.responses.filter(r => r.email === person.email && inRange(r, { range })), signal);
-        people.push({ fullName: person.name, email: person.email, team: team.name, isLeader: person === team.leader, kpis: computeKpis(records, 1) });
-      }
-    }
+    const roster = rosterForTeams(myTeams, { onlyLeaders });
+    const people = roster.map(person => {
+      const records = applySignalFilter(data.responses.filter(r => r.email === person.email && inRange(r, { range })), signal);
+      return { ...person, kpis: computeKpis(records, 1) };
+    });
     res.json({ people });
   });
 

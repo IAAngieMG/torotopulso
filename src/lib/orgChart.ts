@@ -219,6 +219,43 @@ export function rosterEmailsForTeam(teamName: string): string[] {
   return emails;
 }
 
+export interface RosterEntry {
+  fullName: string;
+  email: string;
+  team: string;
+  isLeader: boolean;
+}
+
+/**
+ * Roster sin duplicados de una lista de equipos: cada persona aparece una sola vez, priorizando
+ * el equipo que lidera sobre aquel del que solo es miembro. Alguien puede liderar un equipo y a
+ * la vez ser miembro de otro dentro del mismo alcance (ej. Karen lidera "DTP de Restauración
+ * Territorial" y es miembro de "Gerencia de Restauración Territorial") — sin esto aparecería dos
+ * veces en cualquier vista que junte varios equipos (Personas/Líderes, red flags).
+ */
+export function rosterForTeams(teamNames: string[], opts: { onlyLeaders?: boolean; excludeEmail?: string | null } = {}): RosterEntry[] {
+  const { onlyLeaders = false, excludeEmail = null } = opts;
+  const target = excludeEmail ? norm(excludeEmail) : null;
+  const seen = new Set<string>();
+  const entries: RosterEntry[] = [];
+  const add = (person: OrgMember, team: string, isLeader: boolean) => {
+    if (!person.email || seen.has(person.email) || person.email === target) return;
+    seen.add(person.email);
+    entries.push({ fullName: person.name, email: person.email, team, isLeader });
+  };
+  for (const team of ORG_TEAMS) {
+    if (!teamNames.includes(team.name)) continue;
+    add(team.leader, team.name, true);
+  }
+  if (!onlyLeaders) {
+    for (const team of ORG_TEAMS) {
+      if (!teamNames.includes(team.name)) continue;
+      for (const member of team.members) add(member, team.name, false);
+    }
+  }
+  return entries;
+}
+
 /**
  * Todos los equipos que esa persona lidera. Casi siempre uno solo, pero algunas personas
  * (ej. Luis, que además de "Gerencia de Restauración Territorial" quedó a cargo del equipo
