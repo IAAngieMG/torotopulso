@@ -147,7 +147,8 @@ export default function RecognitionsGallery({
   const current = diplomas?.[index];
   const isSantiago = me.email === 'santiago@toroto.mx';
   const isPatricia = me.email === 'patricia@toroto.mx';
-  const isEnhanced = isSantiago || isPatricia;
+  const isSamantha = me.email === 'samantha@toroto.mx';
+  const isEnhanced = isSantiago || isPatricia || isSamantha;
 
   return (
     <div>
