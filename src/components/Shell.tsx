@@ -123,6 +123,21 @@ export function TopBar({ me, extra, onSetViewAs }: { me: Me; extra?: ReactNode; 
   );
 }
 
+/** Píldora festiva + indicador de Slack que acompañan el encabezado de las vistas de Reconocimientos. */
+export function ReconocimientosHeaderExtras() {
+  return (
+    <>
+      <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+        Reconocimientos del mes
+      </span>
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-toroto-border text-[#0b1c30] text-xs font-medium">
+        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+        Slack Conectado <span className="text-slate-400 font-normal">#reconocimientos</span>
+      </span>
+    </>
+  );
+}
+
 export function ReconocimientosCard({
   onOpenRecognitions,
   isManager,

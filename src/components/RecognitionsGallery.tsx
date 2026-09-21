@@ -8,7 +8,7 @@ import {
   type Me,
   type RecognitionRecord,
 } from '../lib/apiClient.ts';
-import { TopBar } from './Shell.tsx';
+import { TopBar, ReconocimientosHeaderExtras } from './Shell.tsx';
 import DiplomaCard from './DiplomaCard.tsx';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -152,7 +152,7 @@ export default function RecognitionsGallery({
 
   return (
     <div>
-      <TopBar me={me} onSetViewAs={onSetViewAs} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} extra={<ReconocimientosHeaderExtras />} />
       <style>{`
         @media print {
           body * { visibility: hidden; }
