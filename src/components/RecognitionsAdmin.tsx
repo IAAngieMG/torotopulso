@@ -12,7 +12,7 @@ import {
   type Me,
   type Nomination,
 } from '../lib/apiClient.ts';
-import { TopBar } from './Shell.tsx';
+import { TopBar, ReconocimientosHeaderExtras } from './Shell.tsx';
 import DiplomaCard from './DiplomaCard.tsx';
 
 const PLACEHOLDER_ROLE = 'Rol / puesto en la tropa';
@@ -249,7 +249,7 @@ export default function RecognitionsAdmin({
 
   return (
     <div>
-      <TopBar me={me} onSetViewAs={onSetViewAs} />
+      <TopBar me={me} onSetViewAs={onSetViewAs} extra={<ReconocimientosHeaderExtras />} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
           <ArrowLeft size={14} /> Volver
@@ -265,9 +265,8 @@ export default function RecognitionsAdmin({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!pending && !error && <p className="text-sm text-slate-500">Cargando…</p>}
-        {pending?.length === 0 && <p className="text-sm text-slate-500">No hay nominaciones pendientes este mes.</p>}
 
-        {pending && pending.length > 0 && (
+        {pending && (
           <div className="grid lg:grid-cols-[1fr_360px] gap-4 items-start">
             <div className="rounded-xl border border-toroto-border bg-white p-4 space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -295,6 +294,16 @@ export default function RecognitionsAdmin({
                   </div>
                 )}
               </div>
+
+              {!selected && (
+                <>
+                  <DiplomaCard nomineeName="" nomineeRole={PLACEHOLDER_ROLE} mention={PLACEHOLDER_MENTION} month={month} />
+                  <p className="text-xs text-slate-400 text-center pt-2 border-t border-toroto-border">
+                    Vista previa de la plantilla — en cuanto lleguen nominaciones por Slack, aparecerán aquí listas para generar y aprobar
+                    su diploma.
+                  </p>
+                </>
+              )}
 
               {selected && (
                 <>
@@ -382,21 +391,30 @@ export default function RecognitionsAdmin({
                 </div>
                 <span className="text-xs font-semibold text-slate-500">{pending.length} pendientes</span>
               </div>
-              <div className="space-y-3">
-                {pending.map(n => (
-                  <InboxRow
-                    key={n.id}
-                    nomination={n}
-                    isSelected={n.id === selectedId}
-                    onSelect={() => setSelectedId(n.id)}
-                    onGenerate={() => {
-                      setSelectedId(n.id);
-                      generate();
-                    }}
-                    busy={busy && n.id === selectedId}
-                  />
-                ))}
-              </div>
+              {pending.length > 0 ? (
+                <div className="space-y-3">
+                  {pending.map(n => (
+                    <InboxRow
+                      key={n.id}
+                      nomination={n}
+                      isSelected={n.id === selectedId}
+                      onSelect={() => setSelectedId(n.id)}
+                      onGenerate={() => {
+                        setSelectedId(n.id);
+                        generate();
+                      }}
+                      busy={busy && n.id === selectedId}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-toroto-border p-6 text-center">
+                  <p className="text-sm text-slate-500">Aún no han llegado nominaciones por Slack este mes.</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    En cuanto la tropa nomine a alguien en <span className="font-medium">#reconocimientos</span>, aparecerá aquí.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
