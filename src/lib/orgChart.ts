@@ -187,7 +187,7 @@ export const ORG_TEAMS: OrgTeam[] = [
   },
   {
     name: 'Coordinación Territorial de Carbono_Alfredo',
-    leader: m('(sin líder asignado todavía)', null),
+    leader: m('Luis Ortega Arguelles', 'luis@toroto.mx'),
     members: [m('Helen Jacquelinne Hernández Roblero', 'helen@toroto.mx')],
   },
   {
@@ -223,10 +223,19 @@ export function rosterEmailsForTeam(teamName: string): string[] {
   return emails;
 }
 
-/** El equipo que esa persona lidera, si lidera alguno. */
-export function teamLedBy(email: string): OrgTeam | undefined {
+/**
+ * Todos los equipos que esa persona lidera. Casi siempre uno solo, pero algunas personas
+ * (ej. Luis, que además de "Gerencia de Restauración Territorial" quedó a cargo del equipo
+ * huérfano "_Alfredo") lideran más de uno — la cascada de permisos debe arrancar desde todos.
+ */
+export function teamsLedBy(email: string): OrgTeam[] {
   const target = norm(email);
-  return ORG_TEAMS.find(t => t.leader.email === target);
+  return ORG_TEAMS.filter(t => t.leader.email === target);
+}
+
+/** El primer equipo que esa persona lidera, si lidera alguno (compatibilidad con un solo resultado). */
+export function teamLedBy(email: string): OrgTeam | undefined {
+  return teamsLedBy(email)[0];
 }
 
 /**

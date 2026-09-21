@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { fetchPersonDetail, DEFAULT_RANGE, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, RangeSignalControls } from './PulseWidgets.tsx';
@@ -50,6 +50,23 @@ export default function PersonDetail({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}
+
+        {data && data.redFlags.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-600" />
+              <p className="font-display font-semibold text-sm text-amber-900">Red flags detectadas</p>
+            </div>
+            <ul className="space-y-1">
+              {data.redFlags.map((f, i) => (
+                <li key={i} className={`text-sm flex gap-2 ${f.severity === 'alta' ? 'text-red-700' : 'text-amber-700'}`}>
+                  <span className="mt-0.5">•</span>
+                  <span>{f.message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {data && (
           <>

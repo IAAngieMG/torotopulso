@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveOrgAccess, scopedTeamNames } from './orgPermissions.ts';
+import { resolveOrgAccess, scopedTeamNames, allViewAsTargets } from './orgPermissions.ts';
 import { allTeamNames } from './orgChart.ts';
 
-test('los 5 correos de visión global ven todos los equipos, aunque no lideren ninguna DIRECCIÓN', () => {
-  for (const email of ['santiago@toroto.mx', 'ti@toroto.mx', 'patricia@toroto.mx', 'samantha@toroto.mx', 'karla@toroto.mx']) {
+test('los 4 correos de visión global ven todos los equipos, aunque no lideren ninguna DIRECCIÓN', () => {
+  for (const email of ['santiago@toroto.mx', 'ti@toroto.mx', 'patricia@toroto.mx', 'karla@toroto.mx']) {
     const access = resolveOrgAccess(email);
     assert.equal(access.granted, true, email);
     assert.equal(access.visionGlobal, true, email);
@@ -13,10 +13,18 @@ test('los 5 correos de visión global ven todos los equipos, aunque no lideren n
   }
 });
 
-test('Karla y Samantha (visión global, no lideran equipo) toman su equipo de membresía como "Mi equipo"', () => {
+test('Karla (visión global, no lidera equipo) toma su equipo de membresía como "Mi equipo"', () => {
   assert.equal(resolveOrgAccess('karla@toroto.mx').primaryTeam, 'RH');
-  assert.equal(resolveOrgAccess('samantha@toroto.mx').primaryTeam, 'RH');
   assert.equal(resolveOrgAccess('ti@toroto.mx').primaryTeam, 'Dirección de Innovación y Comms');
+});
+
+test('Samantha ya no tiene visión global: solo ve el pulso de RH (acceso restringido, sin liderarlo)', () => {
+  const access = resolveOrgAccess('samantha@toroto.mx');
+  assert.equal(access.granted, true);
+  assert.equal(access.visionGlobal, false);
+  assert.equal(access.primaryTeam, 'RH');
+  assert.deepEqual(access.secondaryTeams, []);
+  assert.deepEqual(access.dataScope, ['RH']);
 });
 
 test('el "General" de un líder se calcula en cascada, no de una lista fija (ejemplo de validación: Iván/AYC)', () => {
@@ -70,24 +78,44 @@ test('un correo que no existe en el organigrama no tiene acceso', () => {
   assert.equal(access.fullName, '');
 });
 
-test('la cascada no puede cruzar un equipo sin líder asignado (Luis no llega a _Alfredo ni a _Helen)', () => {
-  // OT_Juan -> Xicotencatl lidera _Xico, pero nadie lidera "_Alfredo" (así que Helen, que lo
-  // lidera... no: Helen lidera "_Helen", pero es MIEMBRO de "_Alfredo", que no tiene líder). Como
-  // ningún miembro alcanzable desde Luis lidera "_Alfredo", la cascada nunca descubre a Helen ni,
-  // por lo tanto, "_Helen" tampoco entra al alcance de Luis.
+test('Luis lidera dos equipos (Gerencia de Restauración Territorial y _Alfredo) y su cascada une ambos, llegando hasta Helen', () => {
+  // "_Alfredo" quedó sin líder asignado y le pasó a Luis, así que ahora sí es alcanzable, y desde
+  // ahí la cascada sigue hasta "_Helen" (que Helen lidera, siendo miembro de "_Alfredo").
   const access = resolveOrgAccess('luis@toroto.mx');
   assert.equal(access.granted, true);
   assert.equal(access.primaryTeam, 'Gerencia de Restauración Territorial');
-  assert.deepEqual(access.secondaryTeams, ['DTP de Restauración Territorial', 'OT_Juan', 'Coordinación Territorial de Carbono_Xico']);
-  assert.ok(!access.secondaryTeams.includes('Coordinación Territorial de Carbono_Alfredo'));
-  assert.ok(!access.secondaryTeams.includes('Coordinación Territorial de Carbono_Helen'));
+  assert.deepEqual(
+    new Set(access.secondaryTeams),
+    new Set([
+      'DTP de Restauración Territorial',
+      'OT_Juan',
+      'Coordinación Territorial de Carbono_Xico',
+      'Coordinación Territorial de Carbono_Alfredo',
+      'Coordinación Territorial de Carbono_Helen',
+    ]),
+  );
 });
 
-test('Coordinación Territorial de Carbono_Alfredo sin líder asignado no otorga acceso a nadie por ese equipo', () => {
-  // Helen lidera "Coordinación Territorial de Carbono_Helen" y es miembro de "_Alfredo", pero
-  // "_Alfredo" en sí no tiene líder, así que nadie debería recibir acceso a través de ese puesto.
+test('Helen (miembro de _Alfredo, que ahora lidera Luis) sigue liderando su propio equipo con su propio alcance', () => {
   const access = resolveOrgAccess('helen@toroto.mx');
   assert.equal(access.granted, true);
   assert.equal(access.primaryTeam, 'Coordinación Territorial de Carbono_Helen');
   assert.deepEqual(access.dataScope, ['Coordinación Territorial de Carbono_Helen']);
+});
+
+test('Sofia llega hasta Eleazar: su cascada desde Dirección P3 incluye P3', () => {
+  const access = resolveOrgAccess('sofiasalas@toroto.mx');
+  assert.equal(access.granted, true);
+  assert.equal(access.primaryTeam, 'Dirección P3');
+  assert.deepEqual(access.secondaryTeams, ['P3']);
+});
+
+test('allViewAsTargets incluye a todo líder y perfil con acceso otorgado, no una lista fija', () => {
+  const targets = allViewAsTargets(['ti@toroto.mx']);
+  const emails = targets.map(t => t.email);
+  assert.ok(emails.includes('samantha@toroto.mx'), 'Samantha (acceso restringido) debe poder simularse');
+  assert.ok(emails.includes('sofiasalas@toroto.mx'), 'cualquier líder, no solo la lista fija anterior, debe estar disponible');
+  assert.ok(emails.includes('luis@toroto.mx'));
+  assert.ok(!emails.includes('ti@toroto.mx'), 'no debe incluirse a quien está viendo la lista');
+  assert.ok(!emails.includes('ana@toroto.mx'), 'quien no tiene acceso otorgado no debe aparecer como destino de "Ver como"');
 });

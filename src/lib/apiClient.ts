@@ -45,11 +45,30 @@ export interface Me {
   secondaryTeams: string[];
   canSeeFeedback: boolean;
   canManageRecognitions: boolean;
+  /** Puede ver la sección de Reconocimientos del mes (como gestor o solo consultarla). */
+  canViewRecognitions: boolean;
   /** "Ver como": true mientras se está viendo el dashboard como otro perfil. */
   isViewingAs: boolean;
-  /** Solo true para la cuenta real de Angie — controla si se muestra el selector "Ver como". */
+  /** True para las cuentas de Angie y Karla — controla si se muestra el selector "Ver como". */
   canUseViewAs: boolean;
   viewAsOptions: ViewAsOption[];
+}
+
+export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
+export type RedFlagSeverity = 'alta' | 'media';
+
+export interface RedFlag {
+  type: RedFlagType;
+  severity: RedFlagSeverity;
+  message: string;
+}
+
+export interface PersonRedFlags {
+  email: string;
+  fullName: string;
+  team: string;
+  flags: RedFlag[];
+  recommendation: string;
 }
 
 export interface Kpis {
@@ -141,6 +160,7 @@ export interface PersonDetail {
   teams: string[];
   kpis: Kpis;
   responses: PersonResponse[];
+  redFlags: RedFlag[];
 }
 
 export interface FeedbackEntry {
@@ -166,6 +186,10 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
   const params = new URLSearchParams({ range, signal });
   if (team) params.set('team', team);
   return api(`/api/pulse/overview?${params}`) as Promise<Overview>;
+}
+
+export function fetchRedFlags() {
+  return api('/api/pulse/red-flags') as Promise<{ people: PersonRedFlags[] }>;
 }
 
 export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {

@@ -17,7 +17,16 @@ import {
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
 import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, teamByName, guessNomineeRole } from './src/lib/orgChart.ts';
-import { resolveOrgAccess, scopedTeamNames, FEEDBACK_INBOX_EMAILS, RECOGNITION_MANAGER_EMAILS, VIEW_AS_TARGETS } from './src/lib/orgPermissions.ts';
+import {
+  resolveOrgAccess,
+  scopedTeamNames,
+  allViewAsTargets,
+  FEEDBACK_INBOX_EMAILS,
+  RECOGNITION_MANAGER_EMAILS,
+  RECOGNITIONS_VIEWER_EMAILS,
+  VIEW_AS_MANAGER_EMAILS,
+} from './src/lib/orgPermissions.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster, type RosterPerson } from './src/lib/redFlags.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -84,15 +93,17 @@ function applySignalFilter(records: ResponseRecord[], signal: string): ResponseR
 
 /**
  * Identidad "efectiva" para las rutas de pulso: normalmente la del token de sesión, pero si
- * Angie (ti@toroto.mx) mandó el header `X-View-As` con uno de los perfiles permitidos, se
- * calculan alcance y saludo como si fuera esa persona — sin tocar su sesión real. Feedback y
- * Reconocimientos ignoran esto a propósito y siempre usan la sesión real.
+ * Angie o Karla mandaron el header `X-View-As` con el correo de cualquier perfil que de verdad
+ * tenga acceso otorgado, se calculan alcance y saludo como si fueran esa persona — sin tocar su
+ * sesión real. Feedback y Reconocimientos ignoran esto a propósito y siempre usan la sesión real.
  */
 function effectiveIdentity(req: Request, session: SignedSession): { email: string; name: string; isViewingAs: boolean } {
   const viewAs = clean(req.header('x-view-as') || '', 320).toLowerCase();
-  const target = viewAs && VIEW_AS_TARGETS.find(t => t.email === viewAs);
-  if (target && session.email === 'ti@toroto.mx') {
-    return { email: target.email, name: firstNameFor(target.email) || target.label, isViewingAs: true };
+  if (viewAs && VIEW_AS_MANAGER_EMAILS.includes(session.email)) {
+    const access = resolveOrgAccess(viewAs);
+    if (access.granted) {
+      return { email: viewAs, name: firstNameFor(viewAs) || access.fullName.split(' ')[0] || viewAs, isViewingAs: true };
+    }
   }
   return { email: session.email, name: session.name, isViewingAs: false };
 }
@@ -331,7 +342,7 @@ export async function createApp() {
     const effective = effectiveIdentity(req, session);
     const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
-    const canUseViewAs = session.email === 'ti@toroto.mx';
+    const canUseViewAs = VIEW_AS_MANAGER_EMAILS.includes(session.email);
     res.json({
       email: effective.email,
       name: effective.name,
@@ -341,9 +352,10 @@ export async function createApp() {
       secondaryTeams: access.secondaryTeams,
       canSeeFeedback: FEEDBACK_INBOX_EMAILS.includes(effective.email),
       canManageRecognitions: RECOGNITION_MANAGER_EMAILS.includes(effective.email),
+      canViewRecognitions: RECOGNITIONS_VIEWER_EMAILS.includes(effective.email),
       isViewingAs: effective.isViewingAs,
       canUseViewAs,
-      viewAsOptions: canUseViewAs ? VIEW_AS_TARGETS : [],
+      viewAsOptions: canUseViewAs ? allViewAsTargets([session.email]) : [],
     });
   });
 
@@ -384,6 +396,29 @@ export async function createApp() {
         VIERNES: currentQuestionFor(data.preguntas, 'VIERNES'),
       },
     });
+  });
+
+  app.get('/api/pulse/red-flags', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
+    const data = await loadPulseData();
+    const access = resolveOrgAccess(effective.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const myTeams = scopedTeamNames(access);
+    const roster: RosterPerson[] = [];
+    const seen = new Set<string>();
+    for (const team of ORG_TEAMS) {
+      if (!myTeams.includes(team.name)) continue;
+      for (const person of [team.leader, ...team.members]) {
+        if (!person.email || seen.has(person.email)) continue;
+        seen.add(person.email);
+        roster.push({ email: person.email, fullName: person.name, team: team.name });
+      }
+    }
+
+    const people = computeRedFlagsForRoster(roster, data.responses, new Date());
+    res.json({ people });
   });
 
   app.get('/api/pulse/teams-summary', async (req, res) => {
@@ -507,12 +542,14 @@ export async function createApp() {
       signal,
     ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
+    const allPersonRecords = data.responses.filter(r => r.email === targetEmail);
     res.json({
       email: targetEmail,
       fullName: fullNameFor(targetEmail),
       teams: personTeams,
       kpis: computeKpis(records, 1),
       responses: records,
+      redFlags: computeRedFlagsForPerson(allPersonRecords, new Date()),
     });
   });
 
