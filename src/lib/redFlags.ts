@@ -129,8 +129,11 @@ export function computeRedFlagsForPerson(records: ResponseRecord[], now = new Da
     }
   }
 
+  // "Alimentos" (AL) se responde con emojis, no con una calificación de calidad — un 1 ahí no
+  // significa "mal", así que nunca cuenta para la red flag de calificación baja (solo importa si
+  // participó o no, ya cubierto arriba por "missing_response").
   const lowScores = [...recent]
-    .filter(r => r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
+    .filter(r => r.qCode !== 'AL' && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   for (const r of lowScores) {
     flags.push({

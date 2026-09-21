@@ -188,8 +188,9 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
   return api(`/api/pulse/overview?${params}`) as Promise<Overview>;
 }
 
-export function fetchRedFlags() {
-  return api('/api/pulse/red-flags') as Promise<{ people: PersonRedFlags[] }>;
+export function fetchRedFlags(team?: string) {
+  const q = team ? `?team=${encodeURIComponent(team)}` : '';
+  return api(`/api/pulse/red-flags${q}`) as Promise<{ people: PersonRedFlags[] }>;
 }
 
 export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {

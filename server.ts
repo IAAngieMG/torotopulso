@@ -85,6 +85,21 @@ async function loadPulseData(): Promise<PulseData> {
   return inflight;
 }
 
+/** Roster de una lista de equipos, sin duplicados, opcionalmente sin la fila de `excludeEmail`. */
+function buildRoster(teamNames: string[], excludeEmail: string | null): RosterPerson[] {
+  const roster: RosterPerson[] = [];
+  const seen = new Set<string>();
+  for (const team of ORG_TEAMS) {
+    if (!teamNames.includes(team.name)) continue;
+    for (const person of [team.leader, ...team.members]) {
+      if (!person.email || seen.has(person.email) || person.email === excludeEmail) continue;
+      seen.add(person.email);
+      roster.push({ email: person.email, fullName: person.name, team: team.name });
+    }
+  }
+  return roster;
+}
+
 function applySignalFilter(records: ResponseRecord[], signal: string): ResponseRecord[] {
   const upper = signal.toUpperCase();
   if (!upper || upper === 'ALL') return records;
@@ -406,17 +421,23 @@ export async function createApp() {
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const myTeams = scopedTeamNames(access);
-    const roster: RosterPerson[] = [];
-    const seen = new Set<string>();
-    for (const team of ORG_TEAMS) {
-      if (!myTeams.includes(team.name)) continue;
-      for (const person of [team.leader, ...team.members]) {
-        if (!person.email || seen.has(person.email)) continue;
-        seen.add(person.email);
-        roster.push({ email: person.email, fullName: person.name, team: team.name });
-      }
+    const requestedTeam = clean(req.query.team as string, 200);
+    if (requestedTeam && !myTeams.includes(requestedTeam)) {
+      return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
     }
 
+    // En el inicio del dashboard, cada líder solo ve red flags de su propio equipo — los
+    // equipos secundarios (y el resto de la tropa, para visión global) solo aparecen al entrar
+    // a ese equipo puntual desde los filtros (`?team=`). Iván Castro es la única excepción: en
+    // su inicio ve su equipo principal y los secundarios juntos.
+    const homeTeams = effective.email === 'ivancastro@toroto.mx' || !access.primaryTeam ? myTeams : [access.primaryTeam];
+    const teamsInScope = requestedTeam ? [requestedTeam] : homeTeams;
+
+    // Ningún líder ve su propia fila en la lista de red flags — solo la gente de su equipo.
+    // Santiago es la única excepción.
+    const excludeEmail = effective.email === 'santiago@toroto.mx' ? null : effective.email;
+
+    const roster = buildRoster(teamsInScope, excludeEmail);
     const people = computeRedFlagsForRoster(roster, data.responses, new Date());
     res.json({ people });
   });
