@@ -4,6 +4,7 @@ import { fetchTeamDetail, DEFAULT_RANGE, type Me, type RangeOption, type SignalO
 import { TopBar } from './Shell.tsx';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
+import RedFlagsPanel from './RedFlagsPanel.tsx';
 
 interface TeamDetailProps {
   me: Me;
@@ -44,6 +45,8 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
         </div>
 
         <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
+
+        <RedFlagsPanel team={team} onOpenPerson={onOpenPerson} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}

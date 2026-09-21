@@ -107,19 +107,15 @@ export const ORG_TEAMS: OrgTeam[] = [
     members: [m('Eleazar Beh Miss', 'eleazar@toroto.mx')],
   },
   {
+    // Armando ya no está en Toroto. Sus reportes directos (Mario, Miguel, Diana) suben a
+    // reportar directamente a José mientras no se asigne un reemplazo — así se evita dejar un
+    // equipo "Gestión de Proyectos_Armando" con líder huérfano, inalcanzable para nadie.
     name: 'Dirección de Carbono',
     leader: m('José Reyes Sanchez-Cutillas', 'jose@toroto.mx'),
     members: [
-      m('Armando Falfan Cortes', 'armando@toroto.mx'),
       m('Andrea del Rocío Bárcenas García', 'andrea@toroto.mx'),
       m('Jenni Arce López', 'jenni@toroto.mx'),
       m('Juan Carlos Gallardo Brigido', 'juancarlosg@toroto.mx'),
-    ],
-  },
-  {
-    name: 'Gestión de Proyectos_Armando',
-    leader: m('Armando Falfan Cortes', 'armando@toroto.mx'),
-    members: [
       m('Mario Alberto Koyoc Uc', 'mariokoyoc@toroto.mx'),
       m('Miguel Angel Garzon Hernandez', 'miguel@toroto.mx'),
       m('Diana Laura Lomelí Ramírez', 'diana@toroto.mx'),

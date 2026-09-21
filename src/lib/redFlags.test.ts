@@ -73,6 +73,18 @@ test('una calificación menor a 4 genera red flag de calificación baja', () => 
   assert.ok(flags.some(f => f.type === 'low_score' && f.message.includes('2/5')), JSON.stringify(flags));
 });
 
+test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un 1/2 ahí nunca es red flag de calificación baja', () => {
+  const flags = computeRedFlagsForPerson(
+    [
+      record({ timestamp: '2026-09-17T14:00:00.000Z', qCode: 'BD', rawScore: 5 }),
+      record({ timestamp: '2026-09-17T17:00:00.000Z', qCode: 'AL', rawScore: 1 }),
+      record({ timestamp: '2026-09-17T23:00:00.000Z', qCode: 'BT', rawScore: 5 }),
+    ],
+    NOW,
+  );
+  assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
+});
+
 test('una calificación de 4 o más no genera red flag', () => {
   const flags = computeRedFlagsForPerson(
     [

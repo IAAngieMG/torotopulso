@@ -110,6 +110,21 @@ test('Sofia llega hasta Eleazar: su cascada desde Dirección P3 incluye P3', () 
   assert.deepEqual(access.secondaryTeams, ['P3']);
 });
 
+test('Armando ya no está en Toroto: sus reportes (Mario, Miguel, Diana) suben a reportar directo a José y siguen alcanzables', () => {
+  const access = resolveOrgAccess('jose@toroto.mx');
+  assert.equal(access.granted, true);
+  assert.equal(access.primaryTeam, 'Dirección de Carbono');
+  // Mario ahora es miembro directo de "Dirección de Carbono" y sigue liderando su propio equipo,
+  // así que la cascada de José debe seguir llegando hasta "Coordinación Territorial de Carbono_Mario".
+  assert.ok(access.secondaryTeams.includes('Coordinación Territorial de Carbono_Mario'));
+  assert.ok(!access.secondaryTeams.includes('Gestión de Proyectos_Armando'));
+});
+
+test('Armando ya no tiene acceso (ya no está en el organigrama)', () => {
+  const access = resolveOrgAccess('armando@toroto.mx');
+  assert.equal(access.granted, false);
+});
+
 test('allViewAsTargets incluye a todo líder y perfil con acceso otorgado, no una lista fija', () => {
   const targets = allViewAsTargets(['ti@toroto.mx']);
   const emails = targets.map(t => t.email);
