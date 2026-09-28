@@ -57,10 +57,18 @@ test('exactamente 3 días hábiles sin responder (de 5) NO genera red flag de si
   assert.ok(!flags.some(f => f.type === 'silence'), JSON.stringify(flags));
 });
 
-test('responder Inicio del día después de las 10:00 am hora CDMX es red flag', () => {
+const WEEKDAYS_LAST_WEEK = ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25'];
+
+test('responder Inicio del día tarde UN SOLO día no genera red flag de tardanza (no es un patrón)', () => {
   // 16:30 UTC == 10:30 am CDMX (UTC-6), lunes de la semana pasada.
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T16:30:00.000Z', qCode: 'BD' })], NOW);
-  assert.ok(flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
+  assert.ok(!flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
+});
+
+test('responder Inicio del día tarde en 4 de 5 días sí genera red flag de tardanza', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T16:30:00.000Z`, qCode: 'BD' }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(flags.some(f => f.type === 'late_morning' && f.message.includes('4 días')), JSON.stringify(flags));
 });
 
 test('responder Inicio del día antes de las 10:00 am hora CDMX no genera red flag de tardanza', () => {
@@ -69,10 +77,18 @@ test('responder Inicio del día antes de las 10:00 am hora CDMX no genera red fl
   assert.ok(!flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
 });
 
-test('un día activo (respondió BD) sin responder Alimentos ni Cierre del día genera red flags de faltante', () => {
+test('un solo día activo sin responder Alimentos ni Cierre del día NO genera red flag de faltante (no es un patrón)', () => {
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BD' })], NOW);
-  const missing = flags.filter(f => f.type === 'missing_response');
-  assert.equal(missing.length, 2, JSON.stringify(flags));
+  assert.ok(!flags.some(f => f.type === 'missing_response'), JSON.stringify(flags));
+});
+
+test('saltarse "Cierre del día" en 4 de 5 días activos sí genera red flag de faltante', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD' }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(
+    flags.some(f => f.type === 'missing_response' && f.message.includes('Cierre del día') && f.message.includes('4 días')),
+    JSON.stringify(flags),
+  );
 });
 
 test('completar los 3 slots de un día no genera red flags de faltante ese día', () => {
@@ -88,21 +104,24 @@ test('completar los 3 slots de un día no genera red flags de faltante ese día'
   assert.ok(!flags.some(f => f.type === 'missing_response'), JSON.stringify(flags));
 });
 
-test('una calificación menor a 4 genera red flag de calificación baja', () => {
+test('una sola calificación menor a 4 NO genera red flag de calificación baja (no es un patrón)', () => {
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BT', rawScore: 2 })], NOW);
-  assert.ok(flags.some(f => f.type === 'low_score' && f.message.includes('2/5')), JSON.stringify(flags));
+  assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
+});
+
+test('calificación menor a 4 en 4 de 5 días sí genera red flag de calificación baja', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BT', rawScore: 2 }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(flags.some(f => f.type === 'low_score' && f.message.includes('2/5') && f.message.includes('4 días')), JSON.stringify(flags));
 });
 
 test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un 1/2 ahí nunca es red flag de calificación baja', () => {
-  const flags = computeRedFlagsForPerson(
-    EMAIL,
-    [
-      record({ timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BD', rawScore: 5 }),
-      record({ timestamp: '2026-09-21T17:00:00.000Z', qCode: 'AL', rawScore: 1 }),
-      record({ timestamp: '2026-09-21T23:00:00.000Z', qCode: 'BT', rawScore: 5 }),
-    ],
-    NOW,
-  );
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).flatMap(day => [
+    record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 5 }),
+    record({ timestamp: `${day}T17:00:00.000Z`, qCode: 'AL', rawScore: 1 }),
+    record({ timestamp: `${day}T23:00:00.000Z`, qCode: 'BT', rawScore: 5 }),
+  ]);
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 

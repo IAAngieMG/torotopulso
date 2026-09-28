@@ -8,12 +8,13 @@ import { activeVacation } from './vacations.ts';
  * semana pasada completa (lunes a domingo anterior a hoy), no en tiempo real: así el resultado
  * no cambia según la hora del día ni queda a medias mientras avanza la semana en curso.
  *
- *  - Silencio: no respondió ninguna encuesta en más de 3 días hábiles de la semana pasada (3 o
- *    menos se considera normal y no genera red flag).
+ * Ninguna red flag se dispara por un incidente aislado de un solo día: todas piden un patrón de
+ * más de `PATTERN_DAYS_THRESHOLD` (3) días hábiles de la semana pasada, no menos:
+ *  - Silencio: no respondió ninguna encuesta.
  *  - Inicio del día (BD) tarde: respondió después de las 10:00 am hora CDMX.
- *  - Alimentos / Cierre del día (AL/BT) sin contestar: un día en el que sí participó (respondió
+ *  - Alimentos / Cierre del día (AL/BT) sin contestar: días en los que sí participó (respondió
  *    algo) pero se saltó ese slot puntual.
- *  - Calificación baja: cualquier respuesta con calificación menor a 4/5.
+ *  - Calificación baja: respuestas con calificación menor a 4/5.
  *
  * Quien esté de vacaciones (src/lib/vacations.ts) con alcance "all" no genera ninguna red flag.
  *
@@ -28,7 +29,8 @@ const MEXICO_TZ = 'America/Mexico_City';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_SCORE_THRESHOLD = 4;
 const LATE_MORNING_HOUR = 10;
-const SILENT_WEEKDAYS_THRESHOLD = 3;
+/** Ninguna red flag se dispara por un solo día: todas piden más de este número de días con el patrón. */
+const PATTERN_DAYS_THRESHOLD = 3;
 const MAX_FLAGS_PER_PERSON = 6;
 const CONTEXT_PRIOR_WEEKS = 3;
 
@@ -108,7 +110,7 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   const datesWithResponse = new Set(recent.map(r => localDateKey(r.timestamp)));
   const weekdays = weekdayKeysInRange(start, end);
   const silentDays = weekdays.filter(k => !datesWithResponse.has(k)).length;
-  if (silentDays > SILENT_WEEKDAYS_THRESHOLD) {
+  if (silentDays > PATTERN_DAYS_THRESHOLD) {
     flags.push({
       type: 'silence',
       severity: 'alta',
@@ -122,35 +124,53 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key)!.push(r);
   }
+  // Días en los que sí participó (respondió algo), ordenados del más reciente al más antiguo.
+  const activeDateKeys = [...byDate.keys()].sort((a, b) => b.localeCompare(a));
 
-  for (const [dateKey, dayRecords] of [...byDate.entries()].sort(([a], [b]) => b.localeCompare(a))) {
-    const bd = dayRecords.find(r => r.qCode === 'BD');
-    if (bd && localHour(bd.timestamp) >= LATE_MORNING_HOUR) {
-      flags.push({
-        type: 'late_morning',
-        severity: 'media',
-        message: `Respondió "Inicio del día" a las ${localTimeLabel(bd.timestamp)} del ${dateLabel(dateKey)} (después de las 10:00 am).`,
-      });
-    }
-    if (!dayRecords.some(r => r.qCode === 'AL')) {
-      flags.push({ type: 'missing_response', severity: 'media', message: `No respondió "Alimentos" el ${dateLabel(dateKey)}.` });
-    }
-    if (!dayRecords.some(r => r.qCode === 'BT')) {
-      flags.push({ type: 'missing_response', severity: 'media', message: `No respondió "Cierre del día" el ${dateLabel(dateKey)}.` });
-    }
+  const lateMorningDays = activeDateKeys.filter(dateKey => {
+    const bd = byDate.get(dateKey)!.find(r => r.qCode === 'BD');
+    return bd !== undefined && localHour(bd.timestamp) >= LATE_MORNING_HOUR;
+  });
+  if (lateMorningDays.length > PATTERN_DAYS_THRESHOLD) {
+    const latestBd = byDate.get(lateMorningDays[0])!.find(r => r.qCode === 'BD')!;
+    flags.push({
+      type: 'late_morning',
+      severity: 'media',
+      message: `Respondió "Inicio del día" después de las 10:00 am en ${lateMorningDays.length} días de la semana pasada (el más reciente, a las ${localTimeLabel(latestBd.timestamp)} del ${dateLabel(lateMorningDays[0])}).`,
+    });
+  }
+
+  const alMissingDays = activeDateKeys.filter(dateKey => !byDate.get(dateKey)!.some(r => r.qCode === 'AL'));
+  if (alMissingDays.length > PATTERN_DAYS_THRESHOLD) {
+    flags.push({
+      type: 'missing_response',
+      severity: 'media',
+      message: `No respondió "Alimentos" en ${alMissingDays.length} días de la semana pasada, aunque sí participó esos días.`,
+    });
+  }
+
+  const btMissingDays = activeDateKeys.filter(dateKey => !byDate.get(dateKey)!.some(r => r.qCode === 'BT'));
+  if (btMissingDays.length > PATTERN_DAYS_THRESHOLD) {
+    flags.push({
+      type: 'missing_response',
+      severity: 'media',
+      message: `No respondió "Cierre del día" en ${btMissingDays.length} días de la semana pasada, aunque sí participó esos días.`,
+    });
   }
 
   // "Alimentos" (AL) se responde con emojis, no con una calificación de calidad — un 1 ahí no
   // significa "mal", así que nunca cuenta para la red flag de calificación baja (solo importa si
   // participó o no, ya cubierto arriba por "missing_response").
-  const lowScores = [...recent]
+  const lowScoreRecords = [...recent]
     .filter(r => r.qCode !== 'AL' && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  for (const r of lowScores) {
+  const lowScoreDays = new Set(lowScoreRecords.map(r => localDateKey(r.timestamp)));
+  if (lowScoreDays.size > PATTERN_DAYS_THRESHOLD) {
+    const latest = lowScoreRecords[0];
     flags.push({
       type: 'low_score',
       severity: 'alta',
-      message: `Calificación baja (${r.rawScore}/5) en "${QCODE_LABEL[r.qCode] || r.qCode}" el ${dateLabel(localDateKey(r.timestamp))}.`,
+      message: `Calificación baja (menor a 4/5) en ${lowScoreDays.size} días de la semana pasada — la más reciente, ${latest.rawScore}/5 en "${QCODE_LABEL[latest.qCode] || latest.qCode}" el ${dateLabel(localDateKey(latest.timestamp))}.`,
     });
   }
 
