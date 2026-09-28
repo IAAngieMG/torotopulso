@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { fetchPeople, DEFAULT_RANGE, type PersonSummary, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
-import { RangeSignalControls } from './PulseWidgets.tsx';
+import { RangeSignalControls, VacationBadge } from './PulseWidgets.tsx';
 
 export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders: boolean; onOpenPerson: (email: string) => void }) {
   const [range, setRange] = useState<RangeOption>(DEFAULT_RANGE);
@@ -55,6 +55,11 @@ export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders:
               <ChevronRight size={14} className="text-slate-400" />
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{p.team}</p>
+            {p.vacationLabel && (
+              <div className="mt-1.5">
+                <VacationBadge label={p.vacationLabel} />
+              </div>
+            )}
             <p className="text-xs text-slate-500 mt-1">
               BD {p.kpis.bdAverage != null ? `${p.kpis.bdAverage.toFixed(1)}/5` : '—'} · BT{' '}
               {p.kpis.btAverage != null ? `${p.kpis.btAverage.toFixed(1)}/5` : '—'}

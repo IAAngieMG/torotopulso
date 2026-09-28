@@ -1,25 +1,29 @@
 import type { ResponseRecord } from './pulseData.ts';
+import { rangeWindow } from './scoring.ts';
+import { activeVacation } from './vacations.ts';
 
 /**
  * Detección de "red flags" por persona a partir de su propio historial de respuestas — sin IA
- * generativa, son reglas deterministas sobre los datos que ya trae el Sheet:
+ * generativa, son reglas deterministas sobre los datos que ya trae el Sheet, evaluadas sobre la
+ * semana pasada completa (lunes a domingo anterior a hoy), no en tiempo real: así el resultado
+ * no cambia según la hora del día ni queda a medias mientras avanza la semana en curso.
  *
- *  - Silencio: no respondió ninguna encuesta en varios días hábiles seguidos.
+ *  - Silencio: no respondió ninguna encuesta en varios días hábiles de la semana pasada.
  *  - Inicio del día (BD) tarde: respondió después de las 10:00 am hora CDMX.
  *  - Alimentos / Cierre del día (AL/BT) sin contestar: un día en el que sí participó (respondió
  *    algo) pero se saltó ese slot puntual.
  *  - Calificación baja: cualquier respuesta con calificación menor a 4/5.
  *
+ * Quien esté de vacaciones (src/lib/vacations.ts) con alcance "all" no genera ninguna red flag.
+ *
  * Cada persona con al menos una red flag recibe además una recomendación: buscarla directamente
  * y, si hace falta, pedir apoyo a RH.
  */
 
-const DAY_MS = 86400000;
 const MEXICO_TZ = 'America/Mexico_City';
 const LOW_SCORE_THRESHOLD = 4;
 const LATE_MORNING_HOUR = 10;
 const SILENT_WEEKDAYS_THRESHOLD = 3;
-const SILENCE_LOOKBACK_WEEKDAYS = 10;
 const MAX_FLAGS_PER_PERSON = 6;
 
 export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
@@ -61,22 +65,20 @@ function dateLabel(dateKey: string): string {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 }
 
-function isWeekdayKey(dateKey: string): boolean {
-  const day = new Date(`${dateKey}T12:00:00`).getDay();
-  return day >= 1 && day <= 5;
+function ymdKey(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-/** Cuenta días hábiles consecutivos sin ninguna respuesta, retrocediendo desde `now` hasta el último día con actividad. */
-function countSilentWeekdays(datesWithResponse: Set<string>, now: Date): number {
-  let silent = 0;
-  for (let i = 0; i < SILENCE_LOOKBACK_WEEKDAYS; i++) {
-    const d = new Date(now.getTime() - i * DAY_MS);
-    const key = localDateKey(d.toISOString());
-    if (!isWeekdayKey(key)) continue;
-    if (datesWithResponse.has(key)) break;
-    silent++;
+/** Fechas (lunes a viernes) dentro de [start, end), en el mismo formato YYYY-MM-DD que `localDateKey`. */
+function weekdayKeysInRange(start: Date, end: Date): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (cursor < end) {
+    const day = cursor.getDay();
+    if (day >= 1 && day <= 5) keys.push(ymdKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()));
+    cursor.setDate(cursor.getDate() + 1);
   }
-  return silent;
+  return keys;
 }
 
 const SEVERITY_RANK: Record<RedFlagSeverity, number> = { alta: 0, media: 1 };
@@ -85,23 +87,26 @@ function sortFlags(flags: RedFlag[]): RedFlag[] {
   return [...flags].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
 }
 
-/** Calcula las red flags de una persona a partir de sus propias respuestas (ya filtradas a ella). */
-export function computeRedFlagsForPerson(records: ResponseRecord[], now = new Date(), windowDays = 14): RedFlag[] {
-  const cutoff = new Date(now.getTime() - windowDays * DAY_MS);
+/** Calcula las red flags de una persona sobre la semana pasada, a partir de sus propias respuestas. */
+export function computeRedFlagsForPerson(email: string, records: ResponseRecord[], now = new Date()): RedFlag[] {
+  if (activeVacation(email, now)?.scope === 'all') return [];
+
+  const { start, end } = rangeWindow('lastWeek', now);
   const recent = records.filter(r => {
     const t = new Date(r.timestamp);
-    return !Number.isNaN(t.getTime()) && t >= cutoff && t <= now;
+    return !Number.isNaN(t.getTime()) && t >= start && t < end;
   });
 
   const flags: RedFlag[] = [];
 
   const datesWithResponse = new Set(recent.map(r => localDateKey(r.timestamp)));
-  const silentDays = countSilentWeekdays(datesWithResponse, now);
+  const weekdays = weekdayKeysInRange(start, end);
+  const silentDays = weekdays.filter(k => !datesWithResponse.has(k)).length;
   if (silentDays >= SILENT_WEEKDAYS_THRESHOLD) {
     flags.push({
       type: 'silence',
       severity: 'alta',
-      message: `No ha respondido ninguna encuesta en los últimos ${silentDays} días hábiles.`,
+      message: `No respondió ninguna encuesta en ${silentDays} de ${weekdays.length} días hábiles de la semana pasada.`,
     });
   }
 
@@ -170,7 +175,7 @@ export function computeRedFlagsForRoster(roster: RosterPerson[], allRecords: Res
 
   const result: PersonRedFlags[] = [];
   for (const person of roster) {
-    const flags = computeRedFlagsForPerson(byEmail.get(person.email) || [], now);
+    const flags = computeRedFlagsForPerson(person.email, byEmail.get(person.email) || [], now);
     if (flags.length === 0) continue;
     result.push({ email: person.email, fullName: person.fullName, team: person.team, flags, recommendation: buildRecommendation(flags) });
   }

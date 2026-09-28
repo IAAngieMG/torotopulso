@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { fetchTeamDetail, DEFAULT_RANGE, type Me, type RangeOption, type SignalOption, type TeamDetail as TeamDetailData } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
-import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor } from './PulseWidgets.tsx';
+import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor, VacationBadge } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
 import RedFlagsPanel from './RedFlagsPanel.tsx';
 
@@ -80,6 +80,11 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
                         ? `${(((member.weeklyKpis.bdAverage ?? 0) + (member.weeklyKpis.btAverage ?? 0)) / (member.weeklyKpis.bdAverage != null && member.weeklyKpis.btAverage != null ? 2 : 1)).toFixed(1)} / 5`
                         : 'sin datos'}
                     </p>
+                    {member.vacationLabel && (
+                      <div className="mt-1.5">
+                        <VacationBadge label={member.vacationLabel} />
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
