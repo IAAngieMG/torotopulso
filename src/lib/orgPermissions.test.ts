@@ -125,6 +125,22 @@ test('Armando ya no tiene acceso (ya no está en el organigrama)', () => {
   assert.equal(access.granted, false);
 });
 
+test('Mauro se separó del equipo de Yessica: ambos reportan directo a Jenni y lideran su propio equipo por separado', () => {
+  const jenni = resolveOrgAccess('jenni@toroto.mx');
+  assert.equal(jenni.granted, true);
+  assert.ok(jenni.secondaryTeams.includes('Coordinación Territorial de Carbono_Yessica'));
+  assert.ok(jenni.secondaryTeams.includes('Coordinación Territorial de Carbono_Mauro'));
+
+  const yessica = resolveOrgAccess('yessica@toroto.mx');
+  assert.equal(yessica.primaryTeam, 'Coordinación Territorial de Carbono_Yessica');
+  assert.deepEqual(yessica.dataScope, ['Coordinación Territorial de Carbono_Yessica']);
+
+  const mauro = resolveOrgAccess('mauro@toroto.mx');
+  assert.equal(mauro.granted, true);
+  assert.equal(mauro.primaryTeam, 'Coordinación Territorial de Carbono_Mauro');
+  assert.deepEqual(mauro.dataScope, ['Coordinación Territorial de Carbono_Mauro']);
+});
+
 test('allViewAsTargets incluye a todo líder y perfil con acceso otorgado, no una lista fija', () => {
   const targets = allViewAsTargets(['ti@toroto.mx']);
   const emails = targets.map(t => t.email);

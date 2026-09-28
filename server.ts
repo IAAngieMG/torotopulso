@@ -27,6 +27,7 @@ import {
   VIEW_AS_MANAGER_EMAILS,
 } from './src/lib/orgPermissions.ts';
 import { computeRedFlagsForPerson, computeRedFlagsForRoster } from './src/lib/redFlags.ts';
+import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -351,6 +352,7 @@ export async function createApp() {
       primaryTeam: access.primaryTeam,
       secondaryTeams: access.secondaryTeams,
       canSeeFeedback: FEEDBACK_INBOX_EMAILS.includes(effective.email),
+      canDeleteFeedback: effective.email === 'ti@toroto.mx',
       canManageRecognitions: RECOGNITION_MANAGER_EMAILS.includes(effective.email),
       canViewRecognitions: RECOGNITIONS_VIEWER_EMAILS.includes(effective.email),
       isViewingAs: effective.isViewingAs,
@@ -372,11 +374,15 @@ export async function createApp() {
       return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
     }
     const teamsInScope = requestedTeam ? [requestedTeam] : myTeams;
-    const rosterEmails = new Set<string>();
-    for (const t of teamsInScope) for (const e of rosterEmailsForTeam(t)) rosterEmails.add(e);
+    const allRosterEmails = new Set<string>();
+    for (const t of teamsInScope) for (const e of rosterEmailsForTeam(t)) allRosterEmails.add(e);
 
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string).toUpperCase() || 'ALL';
+
+    // Quien esté de vacaciones (o exento de ese signal puntual, ej. David sin Encuesta Viernes)
+    // no cuenta como "esperado sin responder" en la participación.
+    const rosterEmails = new Set(filterVacationingEmails(allRosterEmails, signal));
 
     const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
 
@@ -439,7 +445,7 @@ export async function createApp() {
     const myTeams = scopedTeamNames(access);
     const summary = myTeams.map(teamName => {
       const team = teamByName(teamName)!;
-      const rosterEmails = new Set(rosterEmailsForTeam(teamName));
+      const rosterEmails = new Set(filterVacationingEmails(rosterEmailsForTeam(teamName), signal));
       const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
       const previous = applySignalFilter(
         data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range: range === 'week' ? 'lastWeek' : range })),
@@ -473,9 +479,11 @@ export async function createApp() {
     const onlyLeaders = clean(req.query.leaders as string) === 'true';
 
     const roster = rosterForTeams(myTeams, { onlyLeaders });
+    const now = new Date();
     const people = roster.map(person => {
       const records = applySignalFilter(data.responses.filter(r => r.email === person.email && inRange(r, { range })), signal);
-      return { ...person, kpis: computeKpis(records, 1) };
+      const vacation = activeVacation(person.email, now);
+      return { ...person, kpis: computeKpis(records, 1), vacationLabel: vacation ? vacationLabel(vacation) : null };
     });
     res.json({ people });
   });
@@ -494,21 +502,24 @@ export async function createApp() {
     const team = teamByName(teamName);
     if (!team) return res.status(404).json({ error: 'Equipo no encontrado.' });
 
+    const now = new Date();
     const members = [team.leader, ...team.members]
       .filter(person => person.email)
       .map(person => {
         const personRecords = data.responses.filter(r => r.email === person.email && inRange(r, { range: 'week' }));
+        const vacation = activeVacation(person.email as string, now);
         return {
           fullName: person.name,
           email: person.email as string,
           isLeader: person === team.leader,
           weeklyKpis: computeKpis(personRecords, 1),
+          vacationLabel: vacation ? vacationLabel(vacation) : null,
         };
       });
 
-    const rosterEmails = new Set(members.map(m => m.email));
     const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
     const signal = clean(req.query.signal as string) || 'ALL';
+    const rosterEmails = new Set(filterVacationingEmails(members.map(m => m.email), signal));
     const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
 
     res.json({
@@ -544,13 +555,15 @@ export async function createApp() {
     ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     const allPersonRecords = data.responses.filter(r => r.email === targetEmail);
+    const vacation = activeVacation(targetEmail);
     res.json({
       email: targetEmail,
       fullName: fullNameFor(targetEmail),
       teams: personTeams,
       kpis: computeKpis(records, 1),
       responses: records,
-      redFlags: computeRedFlagsForPerson(allPersonRecords, new Date()),
+      redFlags: computeRedFlagsForPerson(targetEmail, allPersonRecords, new Date()),
+      vacationLabel: vacation ? vacationLabel(vacation) : null,
     });
   });
 
@@ -586,6 +599,23 @@ export async function createApp() {
       res.json({ entries: entries.reverse() });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible cargar el feedback.' });
+    }
+  });
+
+  app.delete('/api/feedback/:id', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    if (session.email !== 'ti@toroto.mx') {
+      return res.status(403).json({ error: 'Solo Angie puede eliminar feedback.' });
+    }
+    try {
+      const id = clean(req.params.id, 100);
+      const entries = await loadFeedback();
+      const filtered = entries.filter(e => e.id !== id);
+      if (filtered.length === entries.length) return res.status(404).json({ error: 'Feedback no encontrado.' });
+      await saveFeedback(filtered);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible eliminar el feedback.' });
     }
   });
 

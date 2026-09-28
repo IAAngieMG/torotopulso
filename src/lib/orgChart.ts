@@ -140,18 +140,22 @@ export const ORG_TEAMS: OrgTeam[] = [
     leader: m('Jenni Arce López', 'jenni@toroto.mx'),
     members: [
       m('Yessica Lyssete Cruz Diaz', 'yessica@toroto.mx'),
+      m('Mauro Francisco Cruz Lorenso', 'mauro@toroto.mx'),
       m('Luis Antonio Loyde De La Cruz', 'luisloyde@toroto.mx'),
       m('Adrián Santiago Jiménez Ocampo', 'santiago.jimenez@toroto.mx'),
     ],
   },
   {
+    // Mauro también es líder (de Christian) — se separó de "_Yessica" y ahora reporta
+    // directo a Jenni, como Yessica, en vez de aparecer como un miembro más de su equipo.
     name: 'Coordinación Territorial de Carbono_Yessica',
     leader: m('Yessica Lyssete Cruz Diaz', 'yessica@toroto.mx'),
-    members: [
-      m('Christian Gerardo Leon Moo', 'christian@toroto.mx'),
-      m('Mauro Francisco Cruz Lorenso', 'mauro@toroto.mx'),
-      m('Kelvint Anchevida', 'kelvint@toroto.mx'),
-    ],
+    members: [m('Kelvint Anchevida', 'kelvint@toroto.mx')],
+  },
+  {
+    name: 'Coordinación Territorial de Carbono_Mauro',
+    leader: m('Mauro Francisco Cruz Lorenso', 'mauro@toroto.mx'),
+    members: [m('Christian Gerardo Leon Moo', 'christian@toroto.mx')],
   },
   {
     name: 'Gerencia de Restauración Territorial',

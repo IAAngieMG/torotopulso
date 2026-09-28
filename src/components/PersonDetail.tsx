@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { fetchPersonDetail, DEFAULT_RANGE, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
-import { KpiGrid, RangeSignalControls } from './PulseWidgets.tsx';
+import { KpiGrid, RangeSignalControls, VacationBadge } from './PulseWidgets.tsx';
 
 const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
 
@@ -42,7 +42,10 @@ export default function PersonDetail({
         </button>
 
         <div>
-          <h2 className="font-display text-lg font-semibold">{data?.fullName || email}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-display text-lg font-semibold">{data?.fullName || email}</h2>
+            {data?.vacationLabel && <VacationBadge label={data.vacationLabel} />}
+          </div>
           <p className="text-sm text-slate-500">{email}{data?.teams.length ? ` · ${data.teams.join(', ')}` : ''}</p>
         </div>
 

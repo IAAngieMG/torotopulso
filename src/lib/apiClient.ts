@@ -44,6 +44,8 @@ export interface Me {
   /** Equipos adicionales a cargo (líderes con acceso ampliado). Vacío si no aplica. */
   secondaryTeams: string[];
   canSeeFeedback: boolean;
+  /** Solo true para Angie — puede eliminar entradas del buzón de feedback ya solucionadas. */
+  canDeleteFeedback: boolean;
   canManageRecognitions: boolean;
   /** Puede ver la sección de Reconocimientos del mes (como gestor o solo consultarla). */
   canViewRecognitions: boolean;
@@ -127,6 +129,8 @@ export interface PersonSummary {
   team: string;
   isLeader: boolean;
   kpis: Kpis;
+  /** Leyenda de vacaciones/ausencia activa (ej. "De vacaciones hasta el 5 de octubre"), o null. */
+  vacationLabel: string | null;
 }
 
 export interface TeamMember {
@@ -134,6 +138,7 @@ export interface TeamMember {
   email: string;
   isLeader: boolean;
   weeklyKpis: Kpis;
+  vacationLabel: string | null;
 }
 
 export interface TeamDetail {
@@ -161,6 +166,7 @@ export interface PersonDetail {
   kpis: Kpis;
   responses: PersonResponse[];
   redFlags: RedFlag[];
+  vacationLabel: string | null;
 }
 
 export interface FeedbackEntry {
@@ -219,6 +225,10 @@ export function sendFeedback(message: string, view: string) {
 
 export function fetchFeedbackInbox() {
   return api('/api/feedback') as Promise<{ entries: FeedbackEntry[] }>;
+}
+
+export function deleteFeedback(id: string) {
+  return api(`/api/feedback/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export interface Nomination {
