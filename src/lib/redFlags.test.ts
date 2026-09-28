@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRedFlagsForPerson, computeRedFlagsForRoster, buildRecommendation } from './redFlags.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster, buildRecommendation, buildFlagContext } from './redFlags.ts';
 import type { ResponseRecord } from './pulseData.ts';
 
 // Lunes 28 de septiembre 2026 -> "semana pasada" = lunes 21 a viernes 25 de septiembre.
@@ -45,6 +45,16 @@ test('varios días hábiles de la semana pasada sin ninguna respuesta genera la 
   // Solo respondió el lunes; martes a viernes (4 días) sin nada.
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T15:00:00.000Z' })], NOW);
   assert.ok(flags.some(f => f.type === 'silence'), JSON.stringify(flags));
+});
+
+test('exactamente 3 días hábiles sin responder (de 5) NO genera red flag de silencio: solo cuenta si son más de 3', () => {
+  // Respondió lunes y martes; miércoles, jueves y viernes (3 días) sin nada.
+  const flags = computeRedFlagsForPerson(
+    EMAIL,
+    [record({ timestamp: '2026-09-21T15:00:00.000Z' }), record({ timestamp: '2026-09-22T15:00:00.000Z' })],
+    NOW,
+  );
+  assert.ok(!flags.some(f => f.type === 'silence'), JSON.stringify(flags));
 });
 
 test('responder Inicio del día después de las 10:00 am hora CDMX es red flag', () => {
@@ -122,6 +132,47 @@ test('una exclusión de alcance solo "VIERNES" (David) no exime de las demás re
 test('buildRecommendation sugiere apoyo de RH cuando hay una red flag de severidad alta', () => {
   assert.match(buildRecommendation([{ type: 'low_score', severity: 'alta', message: '' }]), /RH/);
   assert.doesNotMatch(buildRecommendation([{ type: 'missing_response', severity: 'media', message: '' }]), /RH/);
+});
+
+test('buildRecommendation distingue silencio repentino (antes constante) de silencio ya sostenido', () => {
+  const flags = [{ type: 'silence' as const, severity: 'alta' as const, message: '' }];
+  const sudden = buildRecommendation(flags, { wasActiveBeforeSilence: true, priorAvgScore: null, recurringLateMorning: null });
+  const chronic = buildRecommendation(flags, { wasActiveBeforeSilence: false, priorAvgScore: null, recurringLateMorning: null });
+  assert.notEqual(sudden, chronic);
+  assert.match(sudden, /de un día para otro|repentin/);
+  assert.match(chronic, /ya venía respondiendo poco/i);
+});
+
+test('buildRecommendation menciona la caída repentina de calificación cuando su promedio previo era alto', () => {
+  const flags = [{ type: 'low_score' as const, severity: 'alta' as const, message: '' }];
+  const rec = buildRecommendation(flags, { wasActiveBeforeSilence: null, priorAvgScore: 4.5, recurringLateMorning: null });
+  assert.match(rec, /4\.5\/5/);
+  assert.match(rec, /golpe|puntual/);
+});
+
+test('buildRecommendation no habla de caída repentina si el promedio previo también era bajo', () => {
+  const flags = [{ type: 'low_score' as const, severity: 'alta' as const, message: '' }];
+  const rec = buildRecommendation(flags, { wasActiveBeforeSilence: null, priorAvgScore: 3, recurringLateMorning: null });
+  assert.doesNotMatch(rec, /golpe/);
+  assert.match(rec, /tiempo bajas/);
+});
+
+test('buildFlagContext regresa null en todo cuando no hay historial previo a la semana evaluada', () => {
+  const context = buildFlagContext([], NOW);
+  assert.deepEqual(context, { wasActiveBeforeSilence: null, priorAvgScore: null, recurringLateMorning: null });
+});
+
+test('buildFlagContext detecta que la persona sí era activa antes de la semana de silencio', () => {
+  // buildFlagContext mira las 3 semanas hábiles previas a "lastWeek" (aquí, hasta el 21 de sept).
+  const priorDays = [
+    '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+    '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11',
+    '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18',
+  ];
+  const priorRecords = priorDays.map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 5 }));
+  const context = buildFlagContext(priorRecords, NOW);
+  assert.equal(context.wasActiveBeforeSilence, true);
+  assert.equal(context.priorAvgScore, 5);
 });
 
 test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag, y excluye a quien esté de vacaciones', () => {

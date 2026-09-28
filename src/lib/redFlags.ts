@@ -8,7 +8,8 @@ import { activeVacation } from './vacations.ts';
  * semana pasada completa (lunes a domingo anterior a hoy), no en tiempo real: así el resultado
  * no cambia según la hora del día ni queda a medias mientras avanza la semana en curso.
  *
- *  - Silencio: no respondió ninguna encuesta en varios días hábiles de la semana pasada.
+ *  - Silencio: no respondió ninguna encuesta en más de 3 días hábiles de la semana pasada (3 o
+ *    menos se considera normal y no genera red flag).
  *  - Inicio del día (BD) tarde: respondió después de las 10:00 am hora CDMX.
  *  - Alimentos / Cierre del día (AL/BT) sin contestar: un día en el que sí participó (respondió
  *    algo) pero se saltó ese slot puntual.
@@ -16,15 +17,20 @@ import { activeVacation } from './vacations.ts';
  *
  * Quien esté de vacaciones (src/lib/vacations.ts) con alcance "all" no genera ninguna red flag.
  *
- * Cada persona con al menos una red flag recibe además una recomendación: buscarla directamente
- * y, si hace falta, pedir apoyo a RH.
+ * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
+ * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
+ * de golpe tras ser constante o si ya venía respondiendo poco, o si una calificación baja es una
+ * caída repentina frente a su promedio habitual o algo ya sostenido. Para eso compara la semana
+ * evaluada contra las semanas previas de la misma persona (ver `buildFlagContext`).
  */
 
 const MEXICO_TZ = 'America/Mexico_City';
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LOW_SCORE_THRESHOLD = 4;
 const LATE_MORNING_HOUR = 10;
 const SILENT_WEEKDAYS_THRESHOLD = 3;
 const MAX_FLAGS_PER_PERSON = 6;
+const CONTEXT_PRIOR_WEEKS = 3;
 
 export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
 export type RedFlagSeverity = 'alta' | 'media';
@@ -102,7 +108,7 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   const datesWithResponse = new Set(recent.map(r => localDateKey(r.timestamp)));
   const weekdays = weekdayKeysInRange(start, end);
   const silentDays = weekdays.filter(k => !datesWithResponse.has(k)).length;
-  if (silentDays >= SILENT_WEEKDAYS_THRESHOLD) {
+  if (silentDays > SILENT_WEEKDAYS_THRESHOLD) {
     flags.push({
       type: 'silence',
       severity: 'alta',
@@ -151,11 +157,89 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   return sortFlags(flags).slice(0, MAX_FLAGS_PER_PERSON);
 }
 
-/** Texto de acción sugerido: buscar directamente a la persona y, si hace falta, pedir apoyo a RH. */
-export function buildRecommendation(flags: RedFlag[]): string {
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10;
+}
+
+/**
+ * Señales de las semanas previas a la evaluada, para que la recomendación distinga un cambio
+ * repentino (antes activo/alto, ahora no) de un patrón ya sostenido. `null` en cualquier campo
+ * significa que no hay suficiente historial previo para opinar (nunca "no hay problema").
+ */
+export interface RedFlagContext {
+  wasActiveBeforeSilence: boolean | null;
+  priorAvgScore: number | null;
+  recurringLateMorning: boolean | null;
+}
+
+const EMPTY_CONTEXT: RedFlagContext = { wasActiveBeforeSilence: null, priorAvgScore: null, recurringLateMorning: null };
+
+/** Construye el contexto de las `CONTEXT_PRIOR_WEEKS` semanas anteriores a la semana evaluada. */
+export function buildFlagContext(records: ResponseRecord[], now = new Date()): RedFlagContext {
+  const { start } = rangeWindow('lastWeek', now);
+  const priorStart = new Date(start.getTime() - CONTEXT_PRIOR_WEEKS * 7 * DAY_MS);
+  const prior = records.filter(r => {
+    const t = new Date(r.timestamp);
+    return !Number.isNaN(t.getTime()) && t >= priorStart && t < start;
+  });
+  if (prior.length === 0) return EMPTY_CONTEXT;
+
+  const priorWeekdays = weekdayKeysInRange(priorStart, start);
+  const priorDatesWithResponse = new Set(prior.map(r => localDateKey(r.timestamp)));
+  const priorSilentDays = priorWeekdays.filter(k => !priorDatesWithResponse.has(k)).length;
+  const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;
+
+  const priorAvgScore = average(prior.filter(r => r.qCode !== 'AL' && r.rawScore !== null).map(r => r.rawScore as number));
+
+  const priorBD = prior.filter(r => r.qCode === 'BD');
+  const recurringLateMorning = priorBD.length > 0 ? priorBD.filter(r => localHour(r.timestamp) >= LATE_MORNING_HOUR).length / priorBD.length >= 0.5 : null;
+
+  return { wasActiveBeforeSilence, priorAvgScore, recurringLateMorning };
+}
+
+/**
+ * Texto de acción sugerido, específico al tipo de red flag más relevante (no un genérico "busca
+ * a la persona"): usa `context` (ver `buildFlagContext`) para distinguir un cambio repentino de
+ * un patrón sostenido cuando hay suficiente historial previo.
+ */
+export function buildRecommendation(flags: RedFlag[], context: RedFlagContext = EMPTY_CONTEXT): string {
   const hasAlta = flags.some(f => f.severity === 'alta');
+  const types = new Set(flags.map(f => f.type));
+  const rhSuffix = hasAlta ? ' Si lo necesitas, pide apoyo a RH.' : '';
+
+  if (types.has('silence')) {
+    if (context.wasActiveBeforeSilence === true) {
+      return `Dejó de contestar de un día para otro después de ser constante — pregúntale directamente si algo cambió (carga de trabajo, algo personal, etc.), no asumas que es falta de interés.${rhSuffix}`;
+    }
+    if (context.wasActiveBeforeSilence === false) {
+      return `Ya venía respondiendo poco antes de esta semana, no es algo de un solo día — más que un check-in puntual, conviene ver si el pulso le está costando trabajo o si necesita un recordatorio.${rhSuffix}`;
+    }
+    return `Dejó de responder el pulso varios días — confírmale que está bien y si necesita ayuda para contestar.${rhSuffix}`;
+  }
+
+  if (types.has('low_score')) {
+    if (context.priorAvgScore !== null && context.priorAvgScore >= LOW_SCORE_THRESHOLD) {
+      return `Su calificación bajó de golpe frente a su promedio habitual (${context.priorAvgScore}/5) — pregúntale si fue algo puntual de esta semana en vez de asumir un problema general.${rhSuffix}`;
+    }
+    if (context.priorAvgScore !== null && context.priorAvgScore < LOW_SCORE_THRESHOLD) {
+      return `Sus calificaciones llevan tiempo bajas, no es de una sola semana — vale más una conversación a fondo sobre qué lo tiene así que un check-in rápido.${rhSuffix}`;
+    }
+    return `Calificó bajo esta semana — pregúntale qué fue lo que le costó trabajo.${rhSuffix}`;
+  }
+
+  if (types.has('late_morning')) {
+    return context.recurringLateMorning === true
+      ? 'Suele arrancar tarde el día, no es solo esta semana — vale la pena revisar si su horario de inicio le está funcionando o si necesita ajustarse.'
+      : 'Empezó tarde el día esta semana — pregúntale si tuvo algún imprevisto en la mañana.';
+  }
+
+  if (types.has('missing_response')) {
+    return 'Sí participa en el resto del día pero se salta un slot puntual del pulso — revisa si ese horario choca con algo fijo en su agenda.';
+  }
+
   return hasAlta
-    ? 'Busca a la persona colaboradora para ver cómo está y, si lo necesitas, pide apoyo a RH.'
+    ? `Busca a la persona colaboradora para ver cómo está y, si lo necesitas, pide apoyo a RH.`
     : 'Vale la pena buscar a la persona colaboradora para ver cómo está.';
 }
 
@@ -175,9 +259,11 @@ export function computeRedFlagsForRoster(roster: RosterPerson[], allRecords: Res
 
   const result: PersonRedFlags[] = [];
   for (const person of roster) {
-    const flags = computeRedFlagsForPerson(person.email, byEmail.get(person.email) || [], now);
+    const personRecords = byEmail.get(person.email) || [];
+    const flags = computeRedFlagsForPerson(person.email, personRecords, now);
     if (flags.length === 0) continue;
-    result.push({ email: person.email, fullName: person.fullName, team: person.team, flags, recommendation: buildRecommendation(flags) });
+    const recommendation = buildRecommendation(flags, buildFlagContext(personRecords, now));
+    result.push({ email: person.email, fullName: person.fullName, team: person.team, flags, recommendation });
   }
 
   return result.sort((a, b) => {
