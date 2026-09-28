@@ -130,13 +130,14 @@ test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red fl
     { email: 'silenciosa@toroto.mx', fullName: 'Silenciosa', team: 'Equipo' },
     { email: 'emiliano@toroto.mx', fullName: 'Emiliano', team: 'Equipo' },
   ];
-  const records: ResponseRecord[] = [
-    record({ email: 'sana@toroto.mx', timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BD' }),
-    record({ email: 'sana@toroto.mx', timestamp: '2026-09-21T17:00:00.000Z', qCode: 'AL' }),
-    record({ email: 'sana@toroto.mx', timestamp: '2026-09-21T23:00:00.000Z', qCode: 'BT' }),
-    // Silenciosa no respondió nada la semana pasada.
-    // Emiliano tampoco respondió nada, pero está de vacaciones.
-  ];
+  const sanaDays = ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25'];
+  const records: ResponseRecord[] = sanaDays.flatMap(day => [
+    record({ email: 'sana@toroto.mx', timestamp: `${day}T14:00:00.000Z`, qCode: 'BD' }),
+    record({ email: 'sana@toroto.mx', timestamp: `${day}T17:00:00.000Z`, qCode: 'AL' }),
+    record({ email: 'sana@toroto.mx', timestamp: `${day}T23:00:00.000Z`, qCode: 'BT' }),
+  ]);
+  // Silenciosa no respondió nada la semana pasada.
+  // Emiliano tampoco respondió nada, pero está de vacaciones.
   const result = computeRedFlagsForRoster(roster, records, NOW);
   assert.deepEqual(result.map(p => p.email), ['silenciosa@toroto.mx']);
 });
