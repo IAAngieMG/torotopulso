@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveOrgAccess, scopedTeamNames, allViewAsTargets } from './orgPermissions.ts';
+import { resolveOrgAccess, scopedTeamNames, allViewAsTargets, RECOGNITIONS_VIEWER_EMAILS } from './orgPermissions.ts';
 import { allTeamNames } from './orgChart.ts';
 
 test('los 4 correos de visión global ven todos los equipos, aunque no lideren ninguna DIRECCIÓN', () => {
@@ -37,18 +37,14 @@ test('el "General" de un líder se calcula en cascada, no de una lista fija (eje
   assert.deepEqual(scopedTeamNames(access), ['AYC', 'Contabilidad', 'Administración']);
 });
 
-test('la cascada sigue varios niveles de profundidad (Alejandro: sus reportes lideran equipos cuyos miembros a su vez lideran otros)', () => {
+test('Alejandro tiene visión global igual que Santiago (mismas vistas, excepto Reconocimientos)', () => {
   const access = resolveOrgAccess('alejandro@toroto.mx');
   assert.equal(access.granted, true);
+  assert.equal(access.visionGlobal, true);
   assert.equal(access.primaryTeam, 'Dirección de Gestión de Finanzas y Talento');
-  assert.deepEqual(access.secondaryTeams, [
-    'Dirección de Operaciones Corporativas',
-    'Análisis y Planeación Financiera',
-    'RH',
-    'AYC',
-    'Contabilidad',
-    'Administración',
-  ]);
+  assert.deepEqual(access.secondaryTeams, []);
+  assert.equal(access.dataScope, 'all');
+  assert.equal(RECOGNITIONS_VIEWER_EMAILS.includes('alejandro@toroto.mx'), false);
 });
 
 test('la cascada hace match sin importar mayúsculas en el correo (David)', () => {
