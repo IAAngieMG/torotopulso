@@ -14,7 +14,7 @@ export interface OrgAccess {
 }
 
 /** Sección 2: visibilidad total, las 4 pestañas. */
-export const VISION_GLOBAL_EMAILS = ['santiago@toroto.mx', 'ti@toroto.mx', 'patricia@toroto.mx', 'karla@toroto.mx'];
+export const VISION_GLOBAL_EMAILS = ['santiago@toroto.mx', 'ti@toroto.mx', 'patricia@toroto.mx', 'karla@toroto.mx', 'alejandro@toroto.mx'];
 
 /**
  * Cuentas con acceso restringido a un solo equipo (y su cascada), sin ser líderes formales de
