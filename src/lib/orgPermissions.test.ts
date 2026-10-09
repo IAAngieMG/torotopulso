@@ -121,6 +121,19 @@ test('Armando ya no tiene acceso (ya no está en el organigrama)', () => {
   assert.equal(access.granted, false);
 });
 
+test('Gabriella lidera Comercial de Carbono (ella y Juan Carlos), y José la ve como secundario desde Dirección de Carbono', () => {
+  const jose = resolveOrgAccess('jose@toroto.mx');
+  assert.equal(jose.granted, true);
+  assert.ok(jose.secondaryTeams.includes('Comercial de Carbono'));
+  assert.ok(jose.secondaryTeams.includes('Gestión de Proyectos_Jenni'));
+  assert.ok(jose.secondaryTeams.includes('Coordinación Territorial de Carbono_Yessica'));
+
+  const gabriella = resolveOrgAccess('gabriella@toroto.mx');
+  assert.equal(gabriella.granted, true);
+  assert.equal(gabriella.primaryTeam, 'Comercial de Carbono');
+  assert.deepEqual(gabriella.dataScope, ['Comercial de Carbono']);
+});
+
 test('Mauro se separó del equipo de Yessica: ambos reportan directo a Jenni y lideran su propio equipo por separado', () => {
   const jenni = resolveOrgAccess('jenni@toroto.mx');
   assert.equal(jenni.granted, true);

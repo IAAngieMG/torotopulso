@@ -138,14 +138,38 @@ test('una calificación de 4 o más no genera red flag', () => {
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('quien está de vacaciones (alcance "all") nunca genera red flags, aunque no haya respondido nada', () => {
+test('quien está de vacaciones (alcance "all") toda la semana no genera red flags reales, solo la flag informativa de vacaciones', () => {
   const flags = computeRedFlagsForPerson('emiliano@toroto.mx', [], NOW);
-  assert.deepEqual(flags, []);
+  assert.deepEqual(flags, [
+    { type: 'vacation', severity: 'media', message: 'De vacaciones 5 de 5 días hábiles de la semana pasada — no se espera respuesta esos días.' },
+  ]);
 });
 
-test('una exclusión de alcance solo "VIERNES" (David) no exime de las demás red flags', () => {
+test('vacaciones de solo parte de la semana: los días de vacaciones no cuentan para el umbral de silencio, solo generan la flag informativa', () => {
+  // Valentina está de vacaciones del 8 al 12 de octubre de 2026. Con "now" = lunes 12 de
+  // octubre, "semana pasada" = lunes 5 a viernes 9 — de esos, jueves 8 y viernes 9 son de
+  // vacaciones (2 días); quedan 3 días hábiles normales (lun-mié), en los que no respondió
+  // nada: 3 no supera el umbral (>3), así que no hay red flag de silencio real.
+  const now = new Date('2026-10-12T15:00:00.000Z');
+  const flags = computeRedFlagsForPerson('valentina@toroto.mx', [], now);
+  assert.ok(!flags.some(f => f.type === 'silence'), JSON.stringify(flags));
+  assert.ok(flags.some(f => f.type === 'vacation' && f.message.includes('2 de 5')), JSON.stringify(flags));
+});
+
+test('fuera del rango de vacaciones, si sigue sin contestar más de 3 días hábiles sí genera la red flag real de silencio, además de la de vacaciones', () => {
+  // Con "now" = lunes 19 de octubre, "semana pasada" = lunes 12 a viernes 16 — de esos, solo
+  // el lunes 12 cae en el rango de vacaciones (termina el 12); los otros 4 días hábiles son
+  // normales y, sin ninguna respuesta, sí superan el umbral de silencio.
+  const now = new Date('2026-10-19T15:00:00.000Z');
+  const flags = computeRedFlagsForPerson('valentina@toroto.mx', [], now);
+  assert.ok(flags.some(f => f.type === 'silence'), JSON.stringify(flags));
+  assert.ok(flags.some(f => f.type === 'vacation'), JSON.stringify(flags));
+});
+
+test('fuera de su rango de vacaciones (que empieza el 5 de octubre), David sigue generando red flags normales', () => {
   const flags = computeRedFlagsForPerson('david@toroto.mx', [], NOW);
-  assert.ok(flags.some(f => f.type === 'silence'), 'David solo está exento de la Encuesta Viernes, no de todo el pulso');
+  assert.ok(flags.some(f => f.type === 'silence'), 'la semana evaluada (21-25 sept) es antes de que empiecen sus vacaciones');
+  assert.ok(!flags.some(f => f.type === 'vacation'), JSON.stringify(flags));
 });
 
 test('buildRecommendation sugiere apoyo de RH cuando hay una red flag de severidad alta', () => {
@@ -194,7 +218,7 @@ test('buildFlagContext detecta que la persona sí era activa antes de la semana 
   assert.equal(context.priorAvgScore, 5);
 });
 
-test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag, y excluye a quien esté de vacaciones', () => {
+test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag (real o de vacaciones)', () => {
   const roster = [
     { email: 'sana@toroto.mx', fullName: 'Sana', team: 'Equipo' },
     { email: 'silenciosa@toroto.mx', fullName: 'Silenciosa', team: 'Equipo' },
@@ -206,8 +230,11 @@ test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red fl
     record({ email: 'sana@toroto.mx', timestamp: `${day}T17:00:00.000Z`, qCode: 'AL' }),
     record({ email: 'sana@toroto.mx', timestamp: `${day}T23:00:00.000Z`, qCode: 'BT' }),
   ]);
-  // Silenciosa no respondió nada la semana pasada.
-  // Emiliano tampoco respondió nada, pero está de vacaciones.
+  // Silenciosa no respondió nada la semana pasada: red flag real de silencio.
+  // Emiliano tampoco respondió nada, pero toda su semana fue de vacaciones: solo la flag
+  // informativa de vacaciones, no una red flag real, pero igual aparece en el resultado.
   const result = computeRedFlagsForRoster(roster, records, NOW);
-  assert.deepEqual(result.map(p => p.email), ['silenciosa@toroto.mx']);
+  assert.deepEqual(result.map(p => p.email).sort(), ['emiliano@toroto.mx', 'silenciosa@toroto.mx']);
+  const emiliano = result.find(p => p.email === 'emiliano@toroto.mx')!;
+  assert.ok(emiliano.flags.every(f => f.type === 'vacation'));
 });

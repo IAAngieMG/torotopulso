@@ -16,7 +16,8 @@ export interface VacationPeriod {
 
 export const VACATIONS: VacationPeriod[] = [
   { email: 'emiliano@toroto.mx', until: '2026-10-05', scope: 'all', reason: 'Vacaciones' },
-  { email: 'david@toroto.mx', until: '2026-10-26', scope: 'VIERNES', reason: 'Sin Encuesta Viernes' },
+  { email: 'david@toroto.mx', from: '2026-10-05', until: '2026-10-26', scope: 'all', reason: 'Vacaciones' },
+  { email: 'valentina@toroto.mx', from: '2026-10-08', until: '2026-10-12', scope: 'all', reason: 'Vacaciones' },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();
