@@ -78,7 +78,9 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
                       Pulso del periodo:{' '}
                       {member.kpis.bdAverage != null || member.kpis.btAverage != null
                         ? `${(((member.kpis.bdAverage ?? 0) + (member.kpis.btAverage ?? 0)) / (member.kpis.bdAverage != null && member.kpis.btAverage != null ? 2 : 1)).toFixed(1)} / 5`
-                        : 'sin datos'}
+                        : member.kpis.overallAverage != null
+                          ? `${member.kpis.overallAverage.toFixed(1)} / 5`
+                          : 'sin datos'}
                     </p>
                     {member.vacationLabel && (
                       <div className="mt-1.5">

@@ -52,7 +52,25 @@ test('computeKpis con arreglo vacío no truena y regresa null', () => {
   const kpis = computeKpis([], 10);
   assert.equal(kpis.bdAverage, null);
   assert.equal(kpis.btAverage, null);
+  assert.equal(kpis.overallAverage, null);
   assert.equal(kpis.onTimePct, null);
+});
+
+test('overallAverage promedia TODAS las respuestas calificadas (BD, AL, BT, Viernes), no solo BD/BT', () => {
+  // Alguien que solo contestó "Alimentos" (sin BD ni BT) sigue sin bdAverage/btAverage, pero
+  // overallAverage sí debe reflejar su respuesta — para no mostrarlo como "sin datos" en la
+  // tarjeta individual cuando sí tiene actividad.
+  const records = [rec({ qCode: 'AL', rawScore: 4 }), rec({ qCode: 'Q1', rawScore: 2 })];
+  const kpis = computeKpis(records, 1);
+  assert.equal(kpis.bdAverage, null);
+  assert.equal(kpis.btAverage, null);
+  assert.equal(kpis.overallAverage, 3);
+});
+
+test('overallAverage ignora respuestas sin calificación (rawScore null, como un BD de botones)', () => {
+  const records = [rec({ qCode: 'BD', rawScore: null, choice: 1 })];
+  const kpis = computeKpis(records, 1);
+  assert.equal(kpis.overallAverage, null);
 });
 
 test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
@@ -187,6 +205,7 @@ test('buildAutoInsight basa el clima en BT cuando BD es de botones (sin rawScore
   const kpis = {
     bdAverage: null,
     btAverage: 4.5,
+    overallAverage: 4.5,
     participationPct: 100,
     participationDetail: '2 de 2 personas',
     onTimePct: null,

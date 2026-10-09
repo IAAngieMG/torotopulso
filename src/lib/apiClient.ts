@@ -76,6 +76,7 @@ export interface PersonRedFlags {
 export interface Kpis {
   bdAverage: number | null;
   btAverage: number | null;
+  overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;

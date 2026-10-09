@@ -98,6 +98,10 @@ function onTimeRate(records: ResponseRecord[]): number | null {
 export interface OverviewKpis {
   bdAverage: number | null;
   btAverage: number | null;
+  /** Promedio de TODAS las respuestas con calificación (BD, AL, BT, Viernes) en el rango — para
+   * no mostrar "sin datos" cuando alguien solo contestó encuestas fuera de BD/BT (ver uso en
+   * la tarjeta individual de TeamDetail). */
+  overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;
@@ -134,6 +138,7 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
   return {
     bdAverage: average(scores(records, 'BD')),
     btAverage: average(scores(records, 'BT')),
+    overallAverage: average(records.filter(r => r.rawScore !== null).map(r => r.rawScore as number)),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
