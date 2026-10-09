@@ -15,9 +15,10 @@ export interface VacationPeriod {
 }
 
 export const VACATIONS: VacationPeriod[] = [
-  { email: 'emiliano@toroto.mx', until: '2026-10-05', scope: 'all', reason: 'Vacaciones' },
-  { email: 'david@toroto.mx', from: '2026-10-05', until: '2026-10-26', scope: 'all', reason: 'Vacaciones' },
-  { email: 'valentina@toroto.mx', from: '2026-10-08', until: '2026-10-12', scope: 'all', reason: 'Vacaciones' },
+  { email: 'emiliano@toroto.mx', until: '2026-10-05', scope: 'all', reason: 'De vacaciones' },
+  { email: 'david@toroto.mx', from: '2026-10-05', until: '2026-10-26', scope: 'all', reason: 'De vacaciones' },
+  { email: 'valentina@toroto.mx', from: '2026-10-08', until: '2026-10-12', scope: 'all', reason: 'De vacaciones' },
+  { email: 'ane@toroto.mx', until: '2027-02-08', scope: 'all', reason: 'De maternidad' },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();
@@ -54,9 +55,7 @@ function formatDateEs(dateKey: string): string {
 
 /** Leyenda corta para mostrar junto al nombre de la persona (ej. "De vacaciones hasta el 5 de octubre"). */
 export function vacationLabel(period: VacationPeriod): string {
-  return period.scope === 'all'
-    ? `De vacaciones hasta el ${formatDateEs(period.until)}`
-    : `${period.reason} hasta el ${formatDateEs(period.until)}`;
+  return `${period.reason} hasta el ${formatDateEs(period.until)}`;
 }
 
 /** True si esa persona debe excluirse de la participación/expectativa de ese signal en `at`. */

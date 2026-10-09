@@ -23,7 +23,7 @@ export const ORG_TEAMS: OrgTeam[] = [
     name: 'Dirección General',
     leader: m('Santiago Espinosa Harispuru', 'santiago@toroto.mx'),
     members: [
-      m('Ane Garay Olazabal', null),
+      m('Ane Garay Olazabal', 'ane@toroto.mx'),
       m('Alejandro Morales Heimlich', 'alejandro@toroto.mx'),
       m('David Camhi De La Tejera', 'David@toroto.mx'),
       m('Sofia Salas Ungar', 'sofiasalas@toroto.mx'),
