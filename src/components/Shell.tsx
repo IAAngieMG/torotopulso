@@ -28,6 +28,13 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
               <p className="text-[11px] text-white/50 leading-tight">El pulso de nuestra tropa</p>
             </div>
           </div>
+          <div className="hidden md:block pb-4 border-b border-white/10 w-full">
+            <p className="text-sm font-medium">{me.name}</p>
+            <p className="text-xs text-white/50 mb-3">{me.email}</p>
+            <button onClick={logout} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
+              <LogOut size={14} /> Cerrar sesión
+            </button>
+          </div>
           <nav className="flex md:flex-col gap-1 flex-1">
             {navItems.map(item => (
               <button
@@ -53,13 +60,6 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
               </button>
             )}
           </nav>
-        </div>
-        <div className="hidden md:block p-4 border-t border-white/10">
-          <p className="text-sm font-medium">{me.name}</p>
-          <p className="text-xs text-white/50 mb-3">{me.email}</p>
-          <button onClick={logout} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
-            <LogOut size={14} /> Cerrar sesión
-          </button>
         </div>
       </aside>
 
