@@ -16,7 +16,11 @@ import { activeVacation } from './vacations.ts';
  *    algo) pero se saltó ese slot puntual.
  *  - Calificación baja: respuestas con calificación menor a 4/5.
  *
- * Quien esté de vacaciones (src/lib/vacations.ts) con alcance "all" no genera ninguna red flag.
+ * Los días hábiles en los que la persona estaba de vacaciones (src/lib/vacations.ts, alcance
+ * "all") no cuentan para ningún patrón (ni como silencio ni como parte del denominador), y en
+ * vez de eso generan una "vacation" flag informativa (severidad `media`, se ve amarilla, no
+ * roja) con la leyenda de que no se esperaba respuesta esos días — no es una red flag real. Los
+ * días hábiles fuera del rango de vacaciones de esa misma semana siguen las reglas normales.
  *
  * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
  * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
@@ -34,7 +38,7 @@ const PATTERN_DAYS_THRESHOLD = 3;
 const MAX_FLAGS_PER_PERSON = 6;
 const CONTEXT_PRIOR_WEEKS = 3;
 
-export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
+export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score' | 'vacation';
 export type RedFlagSeverity = 'alta' | 'media';
 
 export interface RedFlag {
@@ -97,8 +101,6 @@ function sortFlags(flags: RedFlag[]): RedFlag[] {
 
 /** Calcula las red flags de una persona sobre la semana pasada, a partir de sus propias respuestas. */
 export function computeRedFlagsForPerson(email: string, records: ResponseRecord[], now = new Date()): RedFlag[] {
-  if (activeVacation(email, now)?.scope === 'all') return [];
-
   const { start, end } = rangeWindow('lastWeek', now);
   const recent = records.filter(r => {
     const t = new Date(r.timestamp);
@@ -109,12 +111,17 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
 
   const datesWithResponse = new Set(recent.map(r => localDateKey(r.timestamp)));
   const weekdays = weekdayKeysInRange(start, end);
-  const silentDays = weekdays.filter(k => !datesWithResponse.has(k)).length;
+  // Días hábiles de la semana evaluada en los que la persona estaba de vacaciones (alcance
+  // "all") — se excluyen del patrón de silencio (y de su denominador) y generan, en su lugar,
+  // la flag informativa de vacaciones más abajo. El resto de la semana sigue las reglas normales.
+  const vacationDays = weekdays.filter(k => activeVacation(email, new Date(`${k}T12:00:00`))?.scope === 'all');
+  const workWeekdays = weekdays.filter(k => !vacationDays.includes(k));
+  const silentDays = workWeekdays.filter(k => !datesWithResponse.has(k)).length;
   if (silentDays > PATTERN_DAYS_THRESHOLD) {
     flags.push({
       type: 'silence',
       severity: 'alta',
-      message: `No respondió ninguna encuesta en ${silentDays} de ${weekdays.length} días hábiles de la semana pasada.`,
+      message: `No respondió ninguna encuesta en ${silentDays} de ${workWeekdays.length} días hábiles de la semana pasada.`,
     });
   }
 
@@ -174,6 +181,14 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     });
   }
 
+  if (vacationDays.length > 0) {
+    flags.push({
+      type: 'vacation',
+      severity: 'media',
+      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+    });
+  }
+
   return sortFlags(flags).slice(0, MAX_FLAGS_PER_PERSON);
 }
 
@@ -227,6 +242,10 @@ export function buildRecommendation(flags: RedFlag[], context: RedFlagContext = 
   const hasAlta = flags.some(f => f.severity === 'alta');
   const types = new Set(flags.map(f => f.type));
   const rhSuffix = hasAlta ? ' Si lo necesitas, pide apoyo a RH.' : '';
+
+  if (types.has('vacation') && types.size === 1) {
+    return 'Está de vacaciones esta semana — no se espera respuesta durante esos días, no es necesario dar seguimiento.';
+  }
 
   if (types.has('silence')) {
     if (context.wasActiveBeforeSilence === true) {

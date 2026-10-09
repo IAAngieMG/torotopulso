@@ -115,11 +115,18 @@ export const ORG_TEAMS: OrgTeam[] = [
     members: [
       m('Andrea del Rocío Bárcenas García', 'andrea@toroto.mx'),
       m('Jenni Arce López', 'jenni@toroto.mx'),
-      m('Juan Carlos Gallardo Brigido', 'juancarlosg@toroto.mx'),
       m('Mario Alberto Koyoc Uc', 'mariokoyoc@toroto.mx'),
       m('Miguel Angel Garzon Hernandez', 'miguel@toroto.mx'),
       m('Diana Laura Lomelí Ramírez', 'diana@toroto.mx'),
+      m('Gabriella Rosato', 'gabriella@toroto.mx'),
     ],
+  },
+  {
+    // Gabriella lidera la Comercial de Carbono — Juan Carlos salió del equipo directo de José
+    // y ahora reporta a ella.
+    name: 'Comercial de Carbono',
+    leader: m('Gabriella Rosato', 'gabriella@toroto.mx'),
+    members: [m('Juan Carlos Gallardo Brigido', 'juancarlosg@toroto.mx')],
   },
   {
     name: 'Coordinación Territorial de Carbono_Mario',
