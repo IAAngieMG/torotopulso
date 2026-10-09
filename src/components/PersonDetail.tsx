@@ -82,7 +82,19 @@ export default function PersonDetail({
             <KpiGrid kpis={data.kpis} />
 
             <div className="rounded-xl border border-toroto-border bg-white p-4">
-              <p className="font-display font-semibold text-sm mb-3">Informe histórico · Encuestas Polly</p>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="font-display font-semibold text-sm">Informe histórico · Encuestas Polly</p>
+                {data.pollyHistory?.estimated && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-300">
+                    Estimado
+                  </span>
+                )}
+              </div>
+              {data.pollyHistory?.estimated && (
+                <p className="text-xs text-amber-700 mb-3">
+                  No hay registro de esta persona en el archivo de Polly — estos números son un estimado, no su desempeño real.
+                </p>
+              )}
               {data.pollyHistory ? (
                 <div className="grid sm:grid-cols-2 gap-3">
                   {data.pollyHistory.inicio && (

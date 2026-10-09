@@ -164,6 +164,8 @@ export interface PollyHistoryEntry {
   fullName: string;
   inicio?: { average: number; totalResponses: number; from: string; to: string };
   cierreParticipacion?: { participationPct: number; totalResponses: number; from: string; to: string };
+  /** true si estos números son un relleno simulado, no un cálculo real del archivo de Polly. */
+  estimated?: boolean;
 }
 
 export interface PersonDetail {

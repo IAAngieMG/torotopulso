@@ -16,6 +16,13 @@
  *  - Solo incluye personas que SIGUEN en el equipo (están en `ORG_TEAMS`) y que además ya tenían
  *    correo asignado — quien no aparece aquí simplemente no tenía registros en ese archivo (típicamente
  *    porque entró a Toroto después del periodo que cubre), y `pollyHistoryFor` devuelve null para ellas.
+ *
+ * Excepción: Bertha Hernández Valencia (`bertha@toroto.mx`) SÍ estaba en Toroto en ese periodo y
+ * tiene votos reales en las hojas crudas de Polly ("BD Pregunta Inicio del día"), pero `Calc_Data`
+ * —de donde sale todo lo demás en este archivo— no la incluye (falta ahí, no es que no tuviera
+ * actividad). Angie pidió explícitamente un resultado simulado para ella mientras tanto, así que su
+ * entrada trae `estimated: true` y números de relleno (no calculados del archivo) — la UI debe
+ * marcarlos como estimados, nunca mostrarlos como si fueran su desempeño real.
  */
 export interface PollyInicioStats {
   /** Promedio 0–10 de las respuestas reales (excluye días sin respuesta). */
@@ -37,9 +44,17 @@ export interface PollyHistoryEntry {
   fullName: string;
   inicio?: PollyInicioStats;
   cierreParticipacion?: PollyCierreParticipacion;
+  /** true si estos números son un relleno simulado, no un cálculo real del archivo (ver comentario arriba). */
+  estimated?: boolean;
 }
 
 const POLLY_HISTORY: Record<string, PollyHistoryEntry> = {
+  'bertha@toroto.mx': {
+    fullName: 'Bertha Hernández Valencia',
+    estimated: true,
+    inicio: { average: 8.5, totalResponses: 250, from: '2024-09-03', to: '2026-08-27' },
+    cierreParticipacion: { participationPct: 85, totalResponses: 250, from: '2024-08-01', to: '2026-05-25' },
+  },
   'david@toroto.mx': {
     fullName: 'David Camhi De La Tejera',
     inicio: { average: 7.93, totalResponses: 29, from: '2024-09-05', to: '2025-06-10' },

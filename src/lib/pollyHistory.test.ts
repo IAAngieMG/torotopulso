@@ -21,6 +21,12 @@ test('pollyHistoryFor regresa null para alguien del equipo actual que no estaba 
   assert.equal(pollyHistoryFor('gabriella@toroto.mx'), null);
 });
 
+test('Bertha tiene un informe marcado como estimado (sí estaba en Toroto pero falta en Calc_Data)', () => {
+  const report = pollyHistoryFor('bertha@toroto.mx');
+  assert.ok(report, 'Bertha debe tener un informe, aunque sea estimado');
+  assert.equal(report!.estimated, true);
+});
+
 test('pollyHistoryFor regresa null para un correo que no existe en el organigrama', () => {
   assert.equal(pollyHistoryFor('nadie@toroto.mx'), null);
 });
