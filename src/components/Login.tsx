@@ -93,11 +93,8 @@ export default function Login({ initialError }: { initialError?: string }) {
           <h1 className="font-display text-4xl md:text-5xl font-bold leading-tight mb-4">
             El pulso de nuestra tropa, en vivo.
           </h1>
-          <p className="text-white/80 text-base max-w-md">
-            Encuestas diarias, tendencias semanales y el clima de cada equipo de Toroto, conectados en un solo lugar.
-          </p>
         </div>
-        <p className="text-white/60 text-xs">Un futuro compatible con la vida · Toroto S.A.P.I. de C.V.</p>
+        <p className="text-white/60 text-xs">Un futuro compatible con la vida</p>
       </div>
 
       <div className="md:w-1/2 flex items-center justify-center p-8 bg-toroto-surface">
