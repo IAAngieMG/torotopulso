@@ -27,6 +27,7 @@ import {
 } from './src/lib/orgPermissions.ts';
 import { computeRedFlagsForPerson, computeRedFlagsForRoster } from './src/lib/redFlags.ts';
 import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
+import { pollyHistoryFor } from './src/lib/pollyHistory.ts';
 import {
   computeKpis,
   computeWeeklySeries,
@@ -562,6 +563,7 @@ export async function createApp() {
       responses: records,
       redFlags: computeRedFlagsForPerson(targetEmail, allPersonRecords, new Date()),
       vacationLabel: vacation ? vacationLabel(vacation) : null,
+      pollyHistory: pollyHistoryFor(targetEmail),
     });
   });
 

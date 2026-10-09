@@ -6,6 +6,12 @@ import { KpiGrid, RangeSignalControls, VacationBadge } from './PulseWidgets.tsx'
 
 const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
 
+const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function formatShortDate(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return `${d} ${MESES_CORTO[(m || 1) - 1]} ${y}`;
+}
+
 export default function PersonDetail({
   me,
   onSetViewAs,
@@ -74,6 +80,51 @@ export default function PersonDetail({
         {data && (
           <>
             <KpiGrid kpis={data.kpis} />
+
+            <div className="rounded-xl border border-toroto-border bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <p className="font-display font-semibold text-sm">Informe histórico · Encuestas Polly</p>
+                {data.pollyHistory?.estimated && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-300">
+                    Estimado
+                  </span>
+                )}
+              </div>
+              {data.pollyHistory?.estimated && (
+                <p className="text-xs text-amber-700 mb-3">
+                  No hay registro de esta persona en el archivo de Polly — estos números son un estimado, no su desempeño real.
+                </p>
+              )}
+              {data.pollyHistory ? (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {data.pollyHistory.inicio && (
+                    <div className="rounded-lg border border-toroto-border p-3">
+                      <p className="text-xs font-semibold text-slate-500">Inicio del día</p>
+                      <p className="text-lg font-semibold text-[#0b1c30]">{data.pollyHistory.inicio.average.toFixed(1)}/10</p>
+                      <p className="text-[11px] text-slate-400">
+                        {data.pollyHistory.inicio.totalResponses} respuestas · {formatShortDate(data.pollyHistory.inicio.from)} a{' '}
+                        {formatShortDate(data.pollyHistory.inicio.to)}
+                      </p>
+                    </div>
+                  )}
+                  {data.pollyHistory.cierreParticipacion && (
+                    <div className="rounded-lg border border-toroto-border p-3">
+                      <p className="text-xs font-semibold text-slate-500">Cierre del día · participación</p>
+                      <p className="text-lg font-semibold text-[#0b1c30]">{data.pollyHistory.cierreParticipacion.participationPct.toFixed(0)}%</p>
+                      <p className="text-[11px] text-slate-400">
+                        {data.pollyHistory.cierreParticipacion.totalResponses} respuestas ·{' '}
+                        {formatShortDate(data.pollyHistory.cierreParticipacion.from)} a {formatShortDate(data.pollyHistory.cierreParticipacion.to)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No hay datos de esta persona en el análisis Polly 2026T 3 — probablemente aún no estaba en Toroto durante ese periodo.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-xl border border-toroto-border bg-white p-4">
               <p className="font-display font-semibold text-sm mb-3">Historial de respuestas</p>
               {data.responses.length === 0 && <p className="text-sm text-slate-500">Sin respuestas en este rango.</p>}

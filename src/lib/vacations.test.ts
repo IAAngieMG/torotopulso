@@ -39,6 +39,16 @@ test('David está de vacaciones (todo signal) del 5 al 26 de octubre 2026, no an
   assert.equal(activeVacation('david@toroto.mx', after), null);
 });
 
+test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () => {
+  const now = new Date('2026-10-09T15:00:00.000Z');
+  const active = activeVacation('ane@toroto.mx', now);
+  assert.ok(active, 'debe estar de maternidad');
+  assert.equal(active!.scope, 'all');
+  assert.match(vacationLabel(active!), /maternidad/i);
+  assert.match(vacationLabel(active!), /8 de febrero/);
+  assert.ok(isExcludedFromSignal('ane@toroto.mx', 'BD', now));
+});
+
 test('quien no tiene periodo registrado nunca se excluye', () => {
   assert.equal(activeVacation('karen@toroto.mx'), null);
   assert.equal(isExcludedFromSignal('karen@toroto.mx', 'VIERNES'), false);
