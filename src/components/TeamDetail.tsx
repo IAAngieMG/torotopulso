@@ -75,9 +75,9 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
                       <ChevronRight size={14} className="text-slate-400" />
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                      Pulso semanal:{' '}
-                      {member.weeklyKpis.bdAverage != null || member.weeklyKpis.btAverage != null
-                        ? `${(((member.weeklyKpis.bdAverage ?? 0) + (member.weeklyKpis.btAverage ?? 0)) / (member.weeklyKpis.bdAverage != null && member.weeklyKpis.btAverage != null ? 2 : 1)).toFixed(1)} / 5`
+                      Pulso del periodo:{' '}
+                      {member.kpis.bdAverage != null || member.kpis.btAverage != null
+                        ? `${(((member.kpis.bdAverage ?? 0) + (member.kpis.btAverage ?? 0)) / (member.kpis.bdAverage != null && member.kpis.btAverage != null ? 2 : 1)).toFixed(1)} / 5`
                         : 'sin datos'}
                     </p>
                     {member.vacationLabel && (

@@ -1,4 +1,4 @@
-import type { ResponseRecord } from './pulseData.ts';
+import { isFridaySignal, type ResponseRecord } from './pulseData.ts';
 
 const DAY_MS = 86400000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -103,6 +103,31 @@ export interface OverviewKpis {
   onTimePct: number | null;
 }
 
+/** Filtra por señal (BD/AL/BT/VIERNES) o regresa todo si la señal es 'ALL'/vacía. */
+export function applySignalFilter(records: ResponseRecord[], signal: string): ResponseRecord[] {
+  const upper = (signal || '').toUpperCase();
+  if (!upper || upper === 'ALL') return records;
+  return upper === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === upper);
+}
+
+/**
+ * KPIs de una sola persona para el rango y la señal seleccionados en la UI (no un rango fijo):
+ * usada tanto para su propia página de detalle como para su tarjeta dentro del detalle de
+ * equipo, para que ambas vistas siempre coincidan con lo que el usuario tiene filtrado.
+ */
+export function kpisForPersonInRange(
+  allRecords: ResponseRecord[],
+  email: string,
+  filter: RangeFilter,
+  signal = 'ALL',
+): OverviewKpis {
+  const personRecords = applySignalFilter(
+    allRecords.filter(r => r.email === email && inRange(r, filter)),
+    signal,
+  );
+  return computeKpis(personRecords, 1);
+}
+
 export function computeKpis(records: ResponseRecord[], rosterSize: number): OverviewKpis {
   const respondents = new Set(records.map(r => r.email).filter(Boolean));
   const participationPct = rosterSize > 0 ? Math.round((respondents.size / rosterSize) * 1000) / 10 : null;
@@ -174,13 +199,81 @@ export interface AutoInsight {
   recommendation: string | null;
 }
 
+const MEXICO_TZ = 'America/Mexico_City';
+/** Ventana de "entrada a tiempo": de 9:00 a 9:30 am hora CDMX. */
+const ENTRADA_WINDOW_START_MIN = 9 * 60;
+const ENTRADA_WINDOW_END_MIN = 9 * 60 + 30;
+/** `choice` que corresponde a cada botón del check-in de entrada, en el orden en que aparecen. */
+const ENTRADA_CHOICE_YA_REGISTRE = 1;
+const ENTRADA_CHOICE_LA_REGISTRO_AHORA = 2;
+
+function localMinutesOfDay(iso: string, tz = MEXICO_TZ): number {
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(d);
+  const hour = Number(parts.find(p => p.type === 'hour')?.value ?? d.getHours());
+  const minute = Number(parts.find(p => p.type === 'minute')?.value ?? d.getMinutes());
+  return hour * 60 + minute;
+}
+
+/**
+ * Lectura del check-in de entrada (slot BD) cuando viene por botones ("Ya registré mi entrada" /
+ * "La registro ahora, por la tarde") en vez de una calificación 1-5 — se detecta por `choice`
+ * (en ese caso `rawScore` viene null, así que no aporta a `bdAverage`). `null` si esta semana el
+ * BD no es de este formato (sin respuestas con `choice`).
+ */
+export interface EntradaInsight {
+  onTimePct: number; // % de respuestas BD entre 9:00 y 9:30 am hora CDMX
+  yaRegistreCount: number;
+  laRegistroAhoraCount: number;
+  total: number;
+}
+
+export function computeEntradaInsight(records: ResponseRecord[]): EntradaInsight | null {
+  const entradas = records.filter(r => r.qCode === 'BD' && r.choice !== null);
+  if (entradas.length === 0) return null;
+  const onTime = entradas.filter(r => {
+    const mins = localMinutesOfDay(r.timestamp);
+    return mins >= ENTRADA_WINDOW_START_MIN && mins <= ENTRADA_WINDOW_END_MIN;
+  });
+  return {
+    onTimePct: Math.round((onTime.length / entradas.length) * 1000) / 10,
+    yaRegistreCount: entradas.filter(r => r.choice === ENTRADA_CHOICE_YA_REGISTRE).length,
+    laRegistroAhoraCount: entradas.filter(r => r.choice === ENTRADA_CHOICE_LA_REGISTRO_AHORA).length,
+    total: entradas.length,
+  };
+}
+
+export interface ChoiceBreakdown {
+  choice: number;
+  count: number;
+  pct: number;
+}
+
+/** Reparto de respuestas de opción múltiple (`choice`) para un qCode, de mayor a menor frecuencia. */
+export function computeChoiceBreakdown(records: ResponseRecord[], qCode: string): ChoiceBreakdown[] {
+  const matching = records.filter(r => r.qCode === qCode && r.choice !== null);
+  if (matching.length === 0) return [];
+  const counts = new Map<number, number>();
+  for (const r of matching) counts.set(r.choice as number, (counts.get(r.choice as number) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([choice, count]) => ({ choice, count, pct: Math.round((count / matching.length) * 1000) / 10 }))
+    .sort((a, b) => b.count - a.count);
+}
+
 /**
  * Resumen automático estilo "Pulso IA" del mockup, pero calculado con reglas simples sobre
  * los números ya obtenidos (no una llamada a un LLM) — evita el costo/latencia de una API de
  * IA para un texto que de todas formas viene de datos determinísticos.
+ *
+ * `records` es el mismo conjunto ya filtrado por rango/señal que produjo `kpis`/`weeklySeries`;
+ * se usa aquí solo para las señales de opción múltiple (entrada a tiempo, comida) que no caben en
+ * `OverviewKpis`.
  */
-export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string): AutoInsight {
-  if (kpis.bdAverage === null && kpis.btAverage === null) {
+export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string, records: ResponseRecord[] = []): AutoInsight {
+  const entrada = computeEntradaInsight(records);
+  const lunch = computeChoiceBreakdown(records, 'AL');
+
+  if (kpis.bdAverage === null && kpis.btAverage === null && entrada === null) {
     return { headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`, bullets: [], recommendation: null };
   }
 
@@ -189,13 +282,26 @@ export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[],
   const bestBd = withBd.length ? withBd.reduce((a, b) => ((b.bd ?? 0) > (a.bd ?? 0) ? b : a)) : null;
   const worstBt = withBt.length ? withBt.reduce((a, b) => ((b.bt ?? 5) < (a.bt ?? 5) ? b : a)) : null;
 
-  const climate = kpis.bdAverage != null && kpis.bdAverage >= 4 ? 'estable y positivo' : kpis.bdAverage != null && kpis.bdAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
+  // El clima se basa en BD cuando trae calificación (rawScore); si ese slot es de botones (como
+  // el check-in de entrada) `bdAverage` viene null y no hay nada que leer ahí, así que el clima
+  // se basa en BT (cierre del día) en vez de asumir "con oportunidad de mejora" por default.
+  const climateSource = kpis.bdAverage ?? kpis.btAverage;
+  const climate = climateSource != null && climateSource >= 4 ? 'estable y positivo' : climateSource != null && climateSource >= 3 ? 'estable' : 'con oportunidad de mejora';
   const capitalizedScope = scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1);
   const headline = `${capitalizedScope} se mantiene ${climate} en este rango.`;
 
   const bullets: string[] = [];
   if (kpis.bdAverage !== null) bullets.push(`El inicio del día promedió **${kpis.bdAverage.toFixed(1)}/5**.`);
-  if (kpis.btAverage !== null) bullets.push(`El cierre del día promedió **${kpis.btAverage.toFixed(1)}/5**.`);
+  if (entrada) {
+    bullets.push(
+      `**${entrada.onTimePct}%** registró su entrada a tiempo (9:00–9:30 am); ${entrada.laRegistroAhoraCount} de ${entrada.total} avisó que la registraría más tarde.`,
+    );
+  }
+  if (lunch.length > 0) {
+    const top = lunch[0];
+    bullets.push(`La opción de comida más elegida fue la opción **#${top.choice}** (${top.pct}% de las respuestas).`);
+  }
+  if (kpis.btAverage !== null) bullets.push(`El cierre del día (cómo se sintieron) promedió **${kpis.btAverage.toFixed(1)}/5**.`);
   if (bestBd) bullets.push(`**${bestBd.day}** fue el día con mejor arranque (${bestBd.bd?.toFixed(1)}/5).`);
   if (kpis.participationPct !== null) {
     bullets.push(
@@ -208,6 +314,8 @@ export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[],
   let recommendation: string | null = null;
   if (worstBt && (worstBt.bt ?? 5) < 3.5) {
     recommendation = `Revisar qué ocurrió el ${worstBt.day.toLowerCase()}, cuando el cierre bajó a ${worstBt.bt?.toFixed(1)}/5.`;
+  } else if (entrada && entrada.onTimePct < 70) {
+    recommendation = `Solo ${entrada.onTimePct}% registró su entrada entre 9:00 y 9:30 am — vale la pena recordar el horario.`;
   } else if (kpis.onTimePct !== null && kpis.onTimePct < 70) {
     recommendation = `Solo ${kpis.onTimePct}% de las respuestas llegaron a tiempo — vale la pena recordar el horario en el standup.`;
   } else if (kpis.participationPct !== null && kpis.participationPct < 80) {

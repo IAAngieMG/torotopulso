@@ -1,7 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ResponseRecord } from './pulseData.ts';
-import { computeKpis, computeWeeklySeries, computeEnergyDistribution, inRange, rangeWindow } from './scoring.ts';
+import {
+  computeKpis,
+  computeWeeklySeries,
+  computeEnergyDistribution,
+  inRange,
+  rangeWindow,
+  kpisForPersonInRange,
+  computeEntradaInsight,
+  computeChoiceBreakdown,
+  buildAutoInsight,
+} from './scoring.ts';
 
 function rec(partial: Partial<ResponseRecord>): ResponseRecord {
   return {
@@ -112,4 +122,80 @@ test('inRange "realtime" solo incluye respuestas de hoy', () => {
   const now = new Date('2026-09-03T12:00:00.000Z');
   assert.equal(inRange(rec({ timestamp: '2026-09-03T08:00:00.000Z' }), { range: 'realtime', now }), true);
   assert.equal(inRange(rec({ timestamp: '2026-09-02T08:00:00.000Z' }), { range: 'realtime', now }), false);
+});
+
+test('kpisForPersonInRange usa el rango seleccionado, no siempre la semana en curso (bug de Angie González)', () => {
+  // Hoy es domingo 6 de septiembre de 2026 -> esta semana es lunes 31 ago - domingo 6 sep;
+  // la semana pasada es lunes 24 ago - domingo 30 ago.
+  const now = new Date('2026-09-06T12:00:00');
+  const email = 'angie.gonzalez@toroto.mx';
+  const records = [
+    rec({ email, qCode: 'BT', rawScore: 2, timestamp: '2026-08-28T20:00:00' }), // semana pasada
+    rec({ email, qCode: 'BT', rawScore: 5, timestamp: '2026-09-02T20:00:00' }), // semana en curso
+  ];
+
+  const lastWeekKpis = kpisForPersonInRange(records, email, { range: 'lastWeek', now });
+  const thisWeekKpis = kpisForPersonInRange(records, email, { range: 'week', now });
+
+  assert.equal(lastWeekKpis.btAverage, 2);
+  assert.equal(thisWeekKpis.btAverage, 5);
+});
+
+test('kpisForPersonInRange filtra por email y por señal', () => {
+  const now = new Date('2026-09-03T12:00:00.000Z');
+  const records = [
+    rec({ email: 'a@toroto.mx', qCode: 'BD', rawScore: 4, timestamp: '2026-09-02T13:00:00.000Z' }),
+    rec({ email: 'a@toroto.mx', qCode: 'BT', rawScore: 1, timestamp: '2026-09-02T13:00:00.000Z' }),
+    rec({ email: 'b@toroto.mx', qCode: 'BD', rawScore: 1, timestamp: '2026-09-02T13:00:00.000Z' }),
+  ];
+  const kpis = kpisForPersonInRange(records, 'a@toroto.mx', { range: 'week', now }, 'BD');
+  assert.equal(kpis.bdAverage, 4);
+  assert.equal(kpis.btAverage, null);
+});
+
+test('computeEntradaInsight detecta entrada a tiempo (9:00-9:30 CDMX) y el botón elegido', () => {
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }), // 09:05 CDMX, a tiempo
+    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T15:30:00.000Z' }), // 09:30 CDMX, a tiempo (límite)
+    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }), // 13:00 CDMX, tarde
+  ];
+  const entrada = computeEntradaInsight(records);
+  assert.ok(entrada);
+  assert.equal(entrada?.total, 3);
+  assert.equal(entrada?.onTimePct, 66.7);
+  assert.equal(entrada?.yaRegistreCount, 1);
+  assert.equal(entrada?.laRegistroAhoraCount, 2);
+});
+
+test('computeEntradaInsight regresa null cuando BD no trae choice (semanas con calificación 1-5)', () => {
+  assert.equal(computeEntradaInsight([rec({ qCode: 'BD', choice: null, rawScore: 4 })]), null);
+});
+
+test('computeChoiceBreakdown reparte por choice y ordena de mayor a menor', () => {
+  const records = [
+    rec({ qCode: 'AL', choice: 1 }),
+    rec({ qCode: 'AL', choice: 1 }),
+    rec({ qCode: 'AL', choice: 2 }),
+    rec({ qCode: 'AL', choice: 3 }),
+  ];
+  const breakdown = computeChoiceBreakdown(records, 'AL');
+  assert.deepEqual(breakdown[0], { choice: 1, count: 2, pct: 50 });
+  assert.equal(breakdown.length, 3);
+});
+
+test('buildAutoInsight basa el clima en BT cuando BD es de botones (sin rawScore)', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: 4.5,
+    participationPct: 100,
+    participationDetail: '2 de 2 personas',
+    onTimePct: null,
+  };
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }),
+  ];
+  const insight = buildAutoInsight(kpis, [], 'la tropa', records);
+  assert.match(insight.headline, /estable y positivo/);
+  assert.ok(insight.bullets.some(b => b.includes('registró su entrada a tiempo')));
 });

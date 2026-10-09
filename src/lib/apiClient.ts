@@ -137,7 +137,7 @@ export interface TeamMember {
   fullName: string;
   email: string;
   isLeader: boolean;
-  weeklyKpis: Kpis;
+  kpis: Kpis;
   vacationLabel: string | null;
 }
 

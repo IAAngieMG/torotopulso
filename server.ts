@@ -12,7 +12,6 @@ import {
   parseRespuestas,
   parsePreguntas,
   currentQuestionFor,
-  isFridaySignal,
   type ResponseRecord,
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
@@ -34,6 +33,8 @@ import {
   computeEnergyDistribution,
   buildAutoInsight,
   inRange,
+  applySignalFilter,
+  kpisForPersonInRange,
   type RangeFilter,
 } from './src/lib/scoring.ts';
 
@@ -84,12 +85,6 @@ async function loadPulseData(): Promise<PulseData> {
     });
   }
   return inflight;
-}
-
-function applySignalFilter(records: ResponseRecord[], signal: string): ResponseRecord[] {
-  const upper = signal.toUpperCase();
-  if (!upper || upper === 'ALL') return records;
-  return upper === 'VIERNES' ? records.filter(r => isFridaySignal(r.qCode)) : records.filter(r => r.qCode === upper);
 }
 
 /**
@@ -394,7 +389,7 @@ export async function createApp() {
       kpis,
       weeklySeries,
       energyDistribution: computeEnergyDistribution(records),
-      insight: buildAutoInsight(kpis, weeklySeries, requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos')),
+      insight: buildAutoInsight(kpis, weeklySeries, requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos'), records),
       questions: {
         BD: currentQuestionFor(data.preguntas, 'BD'),
         AL: currentQuestionFor(data.preguntas, 'AL'),
@@ -503,22 +498,25 @@ export async function createApp() {
     if (!team) return res.status(404).json({ error: 'Equipo no encontrado.' });
 
     const now = new Date();
+    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
+    const signal = clean(req.query.signal as string) || 'ALL';
+
+    // Las tarjetas de miembro deben reflejar el mismo rango y señal que el resto de la página
+    // (gráfica y KPIs de equipo): antes se congelaban siempre en la semana en curso, así que un
+    // líder viendo "semana pasada" veía un número ahí que no correspondía al resto de la vista.
     const members = [team.leader, ...team.members]
       .filter(person => person.email)
       .map(person => {
-        const personRecords = data.responses.filter(r => r.email === person.email && inRange(r, { range: 'week' }));
         const vacation = activeVacation(person.email as string, now);
         return {
           fullName: person.name,
           email: person.email as string,
           isLeader: person === team.leader,
-          weeklyKpis: computeKpis(personRecords, 1),
+          kpis: kpisForPersonInRange(data.responses, person.email as string, { range }, signal),
           vacationLabel: vacation ? vacationLabel(vacation) : null,
         };
       });
 
-    const range = (clean(req.query.range as string) || 'week') as RangeFilter['range'];
-    const signal = clean(req.query.signal as string) || 'ALL';
     const rosterEmails = new Set(filterVacationingEmails(members.map(m => m.email), signal));
     const records = applySignalFilter(data.responses.filter(r => rosterEmails.has(r.email) && inRange(r, { range })), signal);
 
