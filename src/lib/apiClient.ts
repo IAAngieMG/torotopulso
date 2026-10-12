@@ -73,6 +73,14 @@ export interface PersonRedFlags {
   recommendation: string;
 }
 
+/** Alguien de vacaciones (alcance "all") algún día hábil de la semana pasada — nunca es una red flag. */
+export interface VacationStatus {
+  email: string;
+  fullName: string;
+  team: string;
+  message: string;
+}
+
 export interface Kpis {
   bdAverage: number | null;
   btAverage: number | null;
@@ -207,7 +215,7 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
 
 export function fetchRedFlags(team?: string) {
   const q = team ? `?team=${encodeURIComponent(team)}` : '';
-  return api(`/api/pulse/red-flags${q}`) as Promise<{ people: PersonRedFlags[] }>;
+  return api(`/api/pulse/red-flags${q}`) as Promise<{ people: PersonRedFlags[]; vacations: VacationStatus[] }>;
 }
 
 export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {

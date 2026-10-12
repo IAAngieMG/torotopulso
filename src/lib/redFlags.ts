@@ -309,3 +309,34 @@ export function computeRedFlagsForRoster(roster: RosterPerson[], allRecords: Res
     return b.flags.length - a.flags.length;
   });
 }
+
+export interface VacationStatus {
+  email: string;
+  fullName: string;
+  team: string;
+  message: string;
+}
+
+/**
+ * Quién del roster estuvo de vacaciones (alcance "all") algún día hábil de la semana pasada —
+ * nunca es una red flag, así que vive aparte de `computeRedFlagsForRoster`: se muestra como una
+ * flag amarilla informativa en su propia sección, nunca mezclada ni contada junto a las red
+ * flags reales.
+ */
+export function computeVacationStatusForRoster(roster: RosterPerson[], now = new Date()): VacationStatus[] {
+  const { start, end } = rangeWindow('lastWeek', now);
+  const weekdays = weekdayKeysInRange(start, end);
+
+  const result: VacationStatus[] = [];
+  for (const person of roster) {
+    const vacationDays = weekdays.filter(k => activeVacation(person.email, new Date(`${k}T12:00:00`))?.scope === 'all');
+    if (vacationDays.length === 0) continue;
+    result.push({
+      email: person.email,
+      fullName: person.fullName,
+      team: person.team,
+      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+    });
+  }
+  return result;
+}

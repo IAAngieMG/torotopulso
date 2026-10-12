@@ -25,7 +25,7 @@ import {
   RECOGNITIONS_VIEWER_EMAILS,
   VIEW_AS_MANAGER_EMAILS,
 } from './src/lib/orgPermissions.ts';
-import { computeRedFlagsForPerson, computeRedFlagsForRoster } from './src/lib/redFlags.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster } from './src/lib/redFlags.ts';
 import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
 import { pollyHistoryFor } from './src/lib/pollyHistory.ts';
 import {
@@ -426,7 +426,8 @@ export async function createApp() {
 
     const roster = rosterForTeams(teamsInScope, { excludeEmail });
     const people = computeRedFlagsForRoster(roster, data.responses, new Date());
-    res.json({ people });
+    const vacations = computeVacationStatusForRoster(roster, new Date());
+    res.json({ people, vacations });
   });
 
   app.get('/api/pulse/teams-summary', async (req, res) => {

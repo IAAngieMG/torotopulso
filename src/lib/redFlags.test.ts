@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRedFlagsForPerson, computeRedFlagsForRoster, buildRecommendation, buildFlagContext } from './redFlags.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster, buildRecommendation, buildFlagContext } from './redFlags.ts';
 import type { ResponseRecord } from './pulseData.ts';
 
 // Lunes 28 de septiembre 2026 -> "semana pasada" = lunes 21 a viernes 25 de septiembre.
@@ -256,4 +256,21 @@ test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red fl
   // nunca son una red flag, así que no aparece en el resultado.
   const result = computeRedFlagsForRoster(roster, records, NOW);
   assert.deepEqual(result.map(p => p.email).sort(), ['silenciosa@toroto.mx']);
+});
+
+test('computeVacationStatusForRoster regresa como flag amarilla, separada de las red flags, a quien estuvo de vacaciones', () => {
+  const roster = [
+    { email: 'sana@toroto.mx', fullName: 'Sana', team: 'Equipo' },
+    { email: 'emiliano@toroto.mx', fullName: 'Emiliano', team: 'Equipo' },
+  ];
+  const vacations = computeVacationStatusForRoster(roster, NOW);
+  assert.deepEqual(vacations.map(v => v.email), ['emiliano@toroto.mx']);
+  assert.match(vacations[0].message, /De vacaciones 5 de 5 días hábiles/);
+});
+
+test('computeVacationStatusForRoster solo cuenta los días hábiles de vacaciones dentro de la semana evaluada', () => {
+  const roster = [{ email: 'valentina@toroto.mx', fullName: 'Valentina', team: 'Equipo' }];
+  const now = new Date('2026-10-12T15:00:00.000Z');
+  const vacations = computeVacationStatusForRoster(roster, now);
+  assert.match(vacations[0].message, /2 de 5/);
 });
