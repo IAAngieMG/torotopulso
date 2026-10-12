@@ -111,7 +111,8 @@ export interface OverviewKpis {
    * como el dato relevante para ese slot, que ya no trae calificación 1-5. */
   bdOnTimePct: number | null;
   /** Reparto de los dos botones del check-in ("Ya registré mi entrada" / "La registro ahora, por la
-   * tarde"), ej. "3 ya registraron su entrada · 1 la registrará después" — `null` junto con `bdOnTimePct`. */
+   * tarde"), ej. "3 registraron su entrada · 1 avisó que la registraría después" — `null` junto con
+   * `bdOnTimePct`. Siempre en pasado (es el resultado ya dado, no necesariamente "ahora"). */
   bdOnTimeDetail: string | null;
 }
 
@@ -152,9 +153,9 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
     bdOnTimePct: entrada?.onTimePct ?? null,
-    // Siempre en pasado ("avisaron que..."), nunca en futuro ("lo harán"): esta tarjeta reporta
-    // respuestas ya dadas, y el rango puede ser una semana pasada, no necesariamente "ahora".
-    bdOnTimeDetail: entrada ? `${entrada.yaRegistreCount} ya registraron su entrada · ${entrada.laRegistroAhoraCount} avisaron que la registrarían después` : null,
+    // Siempre en pasado ("registraron"/"avisaron", nunca "ya" ni futuro "lo harán"): esta tarjeta
+    // reporta respuestas ya dadas, y el rango puede ser una semana pasada, no necesariamente "ahora".
+    bdOnTimeDetail: entrada ? `${entrada.yaRegistreCount} registraron su entrada · ${entrada.laRegistroAhoraCount} avisaron que la registrarían después` : null,
   };
 }
 
@@ -297,7 +298,13 @@ export function computeChoiceBreakdown(records: ResponseRecord[], qCode: string)
  * se usa aquí solo para las señales de opción múltiple (entrada a tiempo, comida) que no caben en
  * `OverviewKpis`.
  */
-export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[], scopeLabel: string, records: ResponseRecord[] = []): AutoInsight {
+export function buildAutoInsight(
+  kpis: OverviewKpis,
+  weeklySeries: DailyPoint[],
+  scopeLabel: string,
+  records: ResponseRecord[] = [],
+  isPerson = false,
+): AutoInsight {
   const entrada = computeEntradaInsight(records);
   const lunch = computeChoiceBreakdown(records, 'AL');
 
@@ -319,16 +326,20 @@ export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[],
 
   const bullets: string[] = [];
   if (entrada) {
-    bullets.push(
-      `**${entrada.onTimePct}%** registró su entrada a tiempo (9:00–9:30 am); ${entrada.laRegistroAhoraCount} de ${entrada.total} avisó que la registraría más tarde.`,
-    );
+    // Solo se menciona lo que sí pasó: si el 100% registró a tiempo, decir además "0 avisaron
+    // que la registrarían después" no aporta nada (es obvio) — esa cláusula solo suma cuando
+    // hay un reparto real entre los dos botones.
+    const aviso = entrada.laRegistroAhoraCount > 0 ? `; ${entrada.laRegistroAhoraCount} de ${entrada.total} avisó que la registraría más tarde` : '';
+    bullets.push(`**${entrada.onTimePct}%** registró su entrada a tiempo (9:00–9:30 am)${aviso}.`);
   }
   if (lunch.length > 0) {
     const top = lunch[0];
     bullets.push(`La opción de comida más elegida fue la opción **#${top.choice}** (${top.pct}% de las respuestas).`);
   }
-  if (kpis.btAverage !== null) bullets.push(`El cierre del día (cómo se sintieron) promedió **${kpis.btAverage.toFixed(1)}/5**.`);
-  if (kpis.participationPct !== null) {
+  if (kpis.btAverage !== null) bullets.push(`El cierre del día promedió **${kpis.btAverage.toFixed(1)}/5**.`);
+  // La participación (cuántos de cuántos respondieron) solo aporta en equipo/general — en el
+  // resumen de una sola persona es obvio (siempre "1 de 1") y no debe salir.
+  if (!isPerson && kpis.participationPct !== null) {
     bullets.push(
       kpis.participationPct >= 90
         ? `Participación alta: **${kpis.participationPct}%** (${kpis.participationDetail}).`

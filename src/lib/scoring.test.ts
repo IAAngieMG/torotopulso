@@ -65,7 +65,7 @@ test('computeKpis calcula bdOnTimePct/bdOnTimeDetail del check-in por botones de
   ];
   const kpis = computeKpis(records, 2);
   assert.equal(kpis.bdOnTimePct, 50);
-  assert.equal(kpis.bdOnTimeDetail, '1 ya registraron su entrada · 1 avisaron que la registrarían después');
+  assert.equal(kpis.bdOnTimeDetail, '1 registraron su entrada · 1 avisaron que la registrarían después');
 });
 
 test('overallAverage promedia las respuestas calificadas (AL, BT, Viernes), excluyendo BD', () => {
@@ -246,7 +246,7 @@ test('buildAutoInsight basa el clima en BT cuando BD es de botones (sin rawScore
     participationDetail: '2 de 2 personas',
     onTimePct: null,
     bdOnTimePct: 50,
-    bdOnTimeDetail: '1 ya registraron su entrada · 1 avisaron que la registrarían después',
+    bdOnTimeDetail: '1 registraron su entrada · 1 avisaron que la registrarían después',
   };
   const records = [
     rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
@@ -269,7 +269,7 @@ test('buildAutoInsight nunca usa bdAverage para el clima ni lo menciona en bulle
     participationDetail: '2 de 2 personas',
     onTimePct: null,
     bdOnTimePct: 80,
-    bdOnTimeDetail: '4 ya registraron su entrada · 1 avisaron que la registrarían después',
+    bdOnTimeDetail: '4 registraron su entrada · 1 avisaron que la registrarían después',
   };
   const weeklySeries = [
     { day: 'Lunes', bd: 1, bt: 3, bdOnTimePct: 100 },
@@ -290,9 +290,86 @@ test('buildAutoInsight sin respuestas de Cierre del día no opina del ánimo, au
     participationDetail: '1 de 1 personas',
     onTimePct: null,
     bdOnTimePct: 100,
-    bdOnTimeDetail: '1 ya registraron su entrada · 0 avisaron que la registrarían después',
+    bdOnTimeDetail: '1 registraron su entrada · 0 avisaron que la registrarían después',
   };
   const records = [rec({ qCode: 'BD', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' })];
   const insight = buildAutoInsight(kpis, [], 'la tropa', records);
   assert.match(insight.headline, /no tiene respuestas de "Cierre del día"/);
+});
+
+test('buildAutoInsight omite "avisó que la registraría más tarde" cuando el 100% ya registró a tiempo', () => {
+  // Si todos registraron a tiempo, decir "0 de N avisó..." es obvio y no debe aparecer.
+  const kpis = {
+    bdAverage: null,
+    btAverage: 4,
+    overallAverage: 4,
+    participationPct: 100,
+    participationDetail: '1 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: 100,
+    bdOnTimeDetail: '5 registraron su entrada · 0 avisaron que la registrarían después',
+  };
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BT', rawScore: 4 }),
+  ];
+  const insight = buildAutoInsight(kpis, [], 'Juan', records, true);
+  const entradaBullet = insight.bullets.find(b => b.includes('registró su entrada a tiempo'));
+  assert.ok(entradaBullet);
+  assert.ok(!entradaBullet!.includes('avisó'));
+  assert.match(entradaBullet!, /^\*\*100%\*\* registró su entrada a tiempo \(9:00–9:30 am\)\.$/);
+});
+
+test('buildAutoInsight incluye la cláusula de aviso cuando hay un reparto real entre los dos botones', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: 4,
+    overallAverage: 4,
+    participationPct: 100,
+    participationDetail: '2 de 2 personas',
+    onTimePct: null,
+    bdOnTimePct: 50,
+    bdOnTimeDetail: '1 registraron su entrada · 1 avisaron que la registrarían después',
+  };
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }),
+  ];
+  const insight = buildAutoInsight(kpis, [], 'la tropa', records);
+  const entradaBullet = insight.bullets.find(b => b.includes('registró su entrada a tiempo'));
+  assert.ok(entradaBullet?.includes('avisó que la registraría más tarde'));
+});
+
+test('buildAutoInsight no incluye "(cómo se sintieron)" en el bullet de Cierre del día', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: 3.8,
+    overallAverage: 3.8,
+    participationPct: 100,
+    participationDetail: '1 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: null,
+    bdOnTimeDetail: null,
+  };
+  const insight = buildAutoInsight(kpis, [], 'Juan', [], true);
+  const btBullet = insight.bullets.find(b => b.includes('cierre del día'));
+  assert.equal(btBullet, 'El cierre del día promedió **3.8/5**.');
+});
+
+test('buildAutoInsight omite el bullet de participación para una sola persona pero lo conserva en equipo/general', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: 4,
+    overallAverage: 4,
+    participationPct: 100,
+    participationDetail: '1 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: null,
+    bdOnTimeDetail: null,
+  };
+  const personal = buildAutoInsight(kpis, [], 'Juan', [], true);
+  assert.ok(!personal.bullets.some(b => b.includes('Participación')));
+
+  const team = buildAutoInsight(kpis, [], 'la tropa', []);
+  assert.ok(team.bullets.some(b => b.includes('Participación')));
 });
