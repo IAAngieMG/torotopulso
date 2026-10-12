@@ -149,6 +149,10 @@ export interface DailyPoint {
   day: string;
   bd: number | null;
   bt: number | null;
+  /** % de respuestas de "Inicio del día" (check-in por botones) que llegaron a tiempo (9:00-9:30 am
+   * CDMX) — `null` si ese día/semana no hubo respuestas BD de este formato. Es el dato que sí aplica
+   * a "Inicio del día" ahora que ese slot es de botones (sin calificación 1-5, ver `bd` arriba). */
+  bdOnTimePct: number | null;
 }
 
 /**
@@ -164,7 +168,12 @@ export function computeWeeklySeries(records: ResponseRecord[], now = new Date(),
     for (let i = 0; i < 5; i++) {
       const day = new Date(weekStart.getTime() + i * DAY_MS);
       const dayRecords = records.filter(r => new Date(r.timestamp).toDateString() === day.toDateString());
-      points.push({ day: DIAS[day.getDay()], bd: average(scores(dayRecords, 'BD')), bt: average(scores(dayRecords, 'BT')) });
+      points.push({
+        day: DIAS[day.getDay()],
+        bd: average(scores(dayRecords, 'BD')),
+        bt: average(scores(dayRecords, 'BT')),
+        bdOnTimePct: computeEntradaInsight(dayRecords)?.onTimePct ?? null,
+      });
     }
     return points;
   }
@@ -185,6 +194,7 @@ export function computeWeeklySeries(records: ResponseRecord[], now = new Date(),
       day: new Date(weekStartMs).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }),
       bd: average(scores(weekRecords, 'BD')),
       bt: average(scores(weekRecords, 'BT')),
+      bdOnTimePct: computeEntradaInsight(weekRecords)?.onTimePct ?? null,
     }));
 }
 

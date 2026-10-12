@@ -94,6 +94,7 @@ export interface DailyPoint {
   day: string;
   bd: number | null;
   bt: number | null;
+  bdOnTimePct: number | null;
 }
 
 export interface EnergyDistribution {
@@ -186,6 +187,8 @@ export interface PersonDetail {
   vacationLabel: string | null;
   /** Informe histórico de Polly (Análisis Polly 2026T 3.xlsx), o null si no tenía registros en ese archivo. */
   pollyHistory: PollyHistoryEntry | null;
+  /** Análisis automático de la semana pasada para esta persona (fijo, no sigue el rango/señal de la UI). */
+  lastWeekInsight: AutoInsight;
 }
 
 export interface FeedbackEntry {

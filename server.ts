@@ -556,6 +556,14 @@ export async function createApp() {
 
     const allPersonRecords = data.responses.filter(r => r.email === targetEmail);
     const vacation = activeVacation(targetEmail);
+
+    // Análisis de la semana pasada para esta persona, fijo (no sigue el rango/señal elegidos en la
+    // UI): reemplaza el listado de respuesta por respuesta con algo más productivo de leer.
+    const now = new Date();
+    const lastWeekRecords = allPersonRecords.filter(r => inRange(r, { range: 'lastWeek', now }));
+    const lastWeekKpis = computeKpis(lastWeekRecords, 1);
+    const lastWeekSeries = computeWeeklySeries(lastWeekRecords, now, 'lastWeek');
+
     res.json({
       email: targetEmail,
       fullName: fullNameFor(targetEmail),
@@ -565,6 +573,7 @@ export async function createApp() {
       redFlags: computeRedFlagsForPerson(targetEmail, allPersonRecords, new Date()),
       vacationLabel: vacation ? vacationLabel(vacation) : null,
       pollyHistory: pollyHistoryFor(targetEmail),
+      lastWeekInsight: buildAutoInsight(lastWeekKpis, lastWeekSeries, fullNameFor(targetEmail), lastWeekRecords),
     });
   });
 

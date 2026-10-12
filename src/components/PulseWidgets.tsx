@@ -1,6 +1,58 @@
+import { Fragment } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TreePalm } from 'lucide-react';
-import type { DailyPoint, EnergyDistribution, Kpis } from '../lib/apiClient.ts';
+import { TreePalm, Sparkles, Lightbulb } from 'lucide-react';
+import type { AutoInsight, DailyPoint, EnergyDistribution, Kpis } from '../lib/apiClient.ts';
+
+/** Renders `**texto**` como negritas, sin traer una librería de markdown para esto. */
+export function Bold({ text }: { text: string }) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? <strong key={i} className="font-semibold text-[#0b1c30]">{part}</strong> : <Fragment key={i}>{part}</Fragment>,
+      )}
+    </>
+  );
+}
+
+/** Tarjeta de análisis automático ("Pulso IA"): usada tanto en la vista general/de equipo como en
+ * el detalle de una persona (ahí reemplaza el listado de respuestas una por una). */
+export function AiInsightCard({ insight, title = 'Pulso IA' }: { insight: AutoInsight; title?: string }) {
+  if (!insight.headline) return null;
+  return (
+    <div className="rounded-xl border border-toroto-primary/25 bg-gradient-to-br from-toroto-primary-light to-white p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-full bg-toroto-primary text-white flex items-center justify-center shrink-0">
+          <Sparkles size={15} />
+        </div>
+        <p className="font-display font-semibold text-base text-[#0b1c30]">{title}</p>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-toroto-primary bg-white border border-toroto-primary/30 rounded-full px-2 py-0.5">
+          Automático
+        </span>
+      </div>
+      <p className="text-sm font-medium text-[#0b1c30] mb-3">{insight.headline}</p>
+      {insight.bullets.length > 0 && (
+        <ul className="space-y-1.5 mb-3">
+          {insight.bullets.map((b, i) => (
+            <li key={i} className="text-sm text-slate-600 flex gap-2">
+              <span className="text-toroto-primary mt-0.5">•</span>
+              <span><Bold text={b} /></span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {insight.recommendation && (
+        <div className="flex items-start gap-2 rounded-lg bg-white border border-toroto-border p-3 mt-2">
+          <Lightbulb size={15} className="text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Sugerencia de acción</p>
+            <p className="text-sm text-[#0b1c30]">{insight.recommendation}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Leyenda de vacaciones/ausencia junto al nombre de una persona, para que su líder lo sepa a simple vista. */
 export function VacationBadge({ label }: { label: string }) {
@@ -61,10 +113,29 @@ export function WeeklyLineChart({ points, title = 'Evolución' }: { points: Dail
         <LineChart data={points} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-          <YAxis domain={[1, 5]} tick={{ fontSize: 12 }} stroke="#94a3b8" />
-          <Tooltip />
-          <Line type="monotone" dataKey="bd" name="Inicio (BD)" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-          <Line type="monotone" dataKey="bt" name="Cierre (BT)" stroke="#0055b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          <YAxis yAxisId="left" domain={[1, 5]} tick={{ fontSize: 12 }} stroke="#94a3b8" />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            domain={[0, 100]}
+            tickFormatter={v => `${v}%`}
+            tick={{ fontSize: 12 }}
+            stroke="#94a3b8"
+          />
+          <Tooltip formatter={(value: any, name) => (name === 'Inicio del día · % a tiempo' ? [`${value}%`, name] : [value, name])} />
+          {/* "Inicio del día" ya no trae calificación 1-5 (es un check-in por botones), así que su
+              línea mide a qué hora contestan: % que registró su entrada a tiempo (9:00-9:30 am). */}
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="bdOnTimePct"
+            name="Inicio del día · % a tiempo"
+            stroke="#f59e0b"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            connectNulls
+          />
+          <Line yAxisId="left" type="monotone" dataKey="bt" name="Cierre (BT)" stroke="#0055b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         </LineChart>
       </ResponsiveContainer>
     </div>
