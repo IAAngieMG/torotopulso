@@ -68,7 +68,7 @@ test('computeKpis calcula bdOnTimePct/bdOnTimeDetail del check-in por botones de
   assert.equal(kpis.bdOnTimeDetail, '1 ya registraron su entrada · 1 avisaron que la registrarían después');
 });
 
-test('overallAverage promedia TODAS las respuestas calificadas (BD, AL, BT, Viernes), no solo BD/BT', () => {
+test('overallAverage promedia las respuestas calificadas (AL, BT, Viernes), excluyendo BD', () => {
   // Alguien que solo contestó "Alimentos" (sin BD ni BT) sigue sin bdAverage/btAverage, pero
   // overallAverage sí debe reflejar su respuesta — para no mostrarlo como "sin datos" en la
   // tarjeta individual cuando sí tiene actividad.
@@ -77,6 +77,14 @@ test('overallAverage promedia TODAS las respuestas calificadas (BD, AL, BT, Vier
   assert.equal(kpis.bdAverage, null);
   assert.equal(kpis.btAverage, null);
   assert.equal(kpis.overallAverage, 3);
+});
+
+test('overallAverage excluye el rawScore de BD aunque venga poblado (es el botón elegido, no una calificación)', () => {
+  // El check-in de entrada guarda el botón elegido (1 o 2) en `rawScore` — incluirlo en
+  // overallAverage lo haría caer artificialmente, igual que si contara para la calificación general.
+  const records = [rec({ qCode: 'BD', rawScore: 1 }), rec({ qCode: 'BT', rawScore: 5 })];
+  const kpis = computeKpis(records, 1);
+  assert.equal(kpis.overallAverage, 5);
 });
 
 test('overallAverage ignora respuestas sin calificación (rawScore null, como un BD de botones)', () => {
@@ -247,4 +255,44 @@ test('buildAutoInsight basa el clima en BT cuando BD es de botones (sin rawScore
   const insight = buildAutoInsight(kpis, [], 'la tropa', records);
   assert.match(insight.headline, /estable y positivo/);
   assert.ok(insight.bullets.some(b => b.includes('registró su entrada a tiempo')));
+});
+
+test('buildAutoInsight nunca usa bdAverage para el clima ni lo menciona en bullets, aunque venga poblado', () => {
+  // bdAverage ahora puede venir poblado (rawScore = botón elegido, 1 o 2) — si se usara para el
+  // clima, un equipo puntual pero con buen ánimo (BT alto) se vería "con oportunidad de mejora"
+  // solo por el número de botón. Solo "Cierre del día" debe decidir la calificación general.
+  const kpis = {
+    bdAverage: 1.2, // bajo a propósito: si se usara, forzaría "con oportunidad de mejora"
+    btAverage: 4.5,
+    overallAverage: 4.5,
+    participationPct: 100,
+    participationDetail: '2 de 2 personas',
+    onTimePct: null,
+    bdOnTimePct: 80,
+    bdOnTimeDetail: '4 ya registraron su entrada · 1 avisaron que la registrarían después',
+  };
+  const weeklySeries = [
+    { day: 'Lunes', bd: 1, bt: 3, bdOnTimePct: 100 },
+    { day: 'Martes', bd: 2, bt: 5, bdOnTimePct: 60 },
+  ];
+  const insight = buildAutoInsight(kpis, weeklySeries, 'la tropa', []);
+  assert.match(insight.headline, /estable y positivo/);
+  assert.ok(!insight.bullets.some(b => b.includes('inicio del día promedió')));
+  assert.ok(!insight.bullets.some(b => b.includes('mejor arranque')));
+});
+
+test('buildAutoInsight sin respuestas de Cierre del día no opina del ánimo, aunque haya datos de Inicio/Alimentos', () => {
+  const kpis = {
+    bdAverage: 1.0,
+    btAverage: null,
+    overallAverage: null,
+    participationPct: 100,
+    participationDetail: '1 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: 100,
+    bdOnTimeDetail: '1 ya registraron su entrada · 0 avisaron que la registrarían después',
+  };
+  const records = [rec({ qCode: 'BD', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' })];
+  const insight = buildAutoInsight(kpis, [], 'la tropa', records);
+  assert.match(insight.headline, /no tiene respuestas de "Cierre del día"/);
 });

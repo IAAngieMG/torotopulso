@@ -450,11 +450,13 @@ export async function createApp() {
       );
       const kpis = computeKpis(records, rosterEmails.size);
       const previousKpis = range === 'week' ? computeKpis(previous, rosterEmails.size) : null;
+      // La tendencia refleja ánimo, así que se basa solo en "Cierre del día" (BT) — "Inicio del
+      // día" es puntualidad, no calificación, y nunca debe mover este indicador.
       const trend =
-        previousKpis?.bdAverage != null && kpis.bdAverage != null
-          ? kpis.bdAverage > previousKpis.bdAverage
+        previousKpis?.btAverage != null && kpis.btAverage != null
+          ? kpis.btAverage > previousKpis.btAverage
             ? 'up'
-            : kpis.bdAverage < previousKpis.bdAverage
+            : kpis.btAverage < previousKpis.btAverage
               ? 'down'
               : 'flat'
           : 'flat';

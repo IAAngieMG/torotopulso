@@ -98,9 +98,10 @@ function onTimeRate(records: ResponseRecord[]): number | null {
 export interface OverviewKpis {
   bdAverage: number | null;
   btAverage: number | null;
-  /** Promedio de TODAS las respuestas con calificación (BD, AL, BT, Viernes) en el rango — para
-   * no mostrar "sin datos" cuando alguien solo contestó encuestas fuera de BD/BT (ver uso en
-   * la tarjeta individual de TeamDetail). */
+  /** Promedio de respuestas con calificación en el rango, EXCLUYENDO "Inicio del día" (su
+   * `rawScore` es el botón elegido, no una calificación de ánimo) — para no mostrar "sin datos"
+   * cuando alguien solo contestó encuestas fuera de BT (ver uso en la tarjeta individual de
+   * TeamDetail), sin dejar que la puntualidad de BD mueva ese promedio. */
   overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
@@ -146,7 +147,7 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
   return {
     bdAverage: average(scores(records, 'BD')),
     btAverage: average(scores(records, 'BT')),
-    overallAverage: average(records.filter(r => r.rawScore !== null).map(r => r.rawScore as number)),
+    overallAverage: average(records.filter(r => r.qCode !== 'BD' && r.rawScore !== null).map(r => r.rawScore as number)),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
@@ -300,25 +301,23 @@ export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[],
   const entrada = computeEntradaInsight(records);
   const lunch = computeChoiceBreakdown(records, 'AL');
 
-  if (kpis.bdAverage === null && kpis.btAverage === null && entrada === null) {
+  if (kpis.btAverage === null && entrada === null && lunch.length === 0) {
     return { headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`, bullets: [], recommendation: null };
   }
 
-  const withBd = weeklySeries.filter(p => p.bd !== null);
   const withBt = weeklySeries.filter(p => p.bt !== null);
-  const bestBd = withBd.length ? withBd.reduce((a, b) => ((b.bd ?? 0) > (a.bd ?? 0) ? b : a)) : null;
   const worstBt = withBt.length ? withBt.reduce((a, b) => ((b.bt ?? 5) < (a.bt ?? 5) ? b : a)) : null;
 
-  // El clima se basa en BD cuando trae calificación (rawScore); si ese slot es de botones (como
-  // el check-in de entrada) `bdAverage` viene null y no hay nada que leer ahí, así que el clima
-  // se basa en BT (cierre del día) en vez de asumir "con oportunidad de mejora" por default.
-  const climateSource = kpis.bdAverage ?? kpis.btAverage;
-  const climate = climateSource != null && climateSource >= 4 ? 'estable y positivo' : climateSource != null && climateSource >= 3 ? 'estable' : 'con oportunidad de mejora';
+  // El único dato que refleja cómo se sintió la persona/equipo es "Cierre del día" (BT): "Inicio
+  // del día" (puntualidad) y "Alimentos" (participación) son indicadores aparte, nunca deben
+  // mover la calificación general — si no hay BT en el rango, no hay base para opinar del ánimo.
+  const climate = kpis.btAverage == null ? null : kpis.btAverage >= 4 ? 'estable y positivo' : kpis.btAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
   const capitalizedScope = scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1);
-  const headline = `${capitalizedScope} se mantiene ${climate} en este rango.`;
+  const headline = climate
+    ? `${capitalizedScope} se mantiene ${climate} en este rango.`
+    : `${capitalizedScope} no tiene respuestas de "Cierre del día" en este rango para evaluar el ánimo.`;
 
   const bullets: string[] = [];
-  if (kpis.bdAverage !== null) bullets.push(`El inicio del día promedió **${kpis.bdAverage.toFixed(1)}/5**.`);
   if (entrada) {
     bullets.push(
       `**${entrada.onTimePct}%** registró su entrada a tiempo (9:00–9:30 am); ${entrada.laRegistroAhoraCount} de ${entrada.total} avisó que la registraría más tarde.`,
@@ -329,7 +328,6 @@ export function buildAutoInsight(kpis: OverviewKpis, weeklySeries: DailyPoint[],
     bullets.push(`La opción de comida más elegida fue la opción **#${top.choice}** (${top.pct}% de las respuestas).`);
   }
   if (kpis.btAverage !== null) bullets.push(`El cierre del día (cómo se sintieron) promedió **${kpis.btAverage.toFixed(1)}/5**.`);
-  if (bestBd) bullets.push(`**${bestBd.day}** fue el día con mejor arranque (${bestBd.bd?.toFixed(1)}/5).`);
   if (kpis.participationPct !== null) {
     bullets.push(
       kpis.participationPct >= 90
