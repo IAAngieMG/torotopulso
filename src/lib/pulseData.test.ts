@@ -14,6 +14,17 @@ test('parseRespuestas castea scores numéricos y deja email en minúsculas', () 
   assert.equal(parsed[0].choice, 2);
 });
 
+test('parseRespuestas normaliza el qCode "BUK-E" del check-in de entrada a "BD"', () => {
+  const rows = [
+    ['timestamps', 'responseKey', 'surveyName', 'qCode', 'question', 'respondentName', 'email', 'slackUserId', 'groups', 'roles', 'rawScore', 'score', 'sentiment', 'choice', 'scheduledDate', 'scheduledTime'],
+    ['2026-10-06T15:05:00.000Z', 'k', 'Buk', 'BUK-E', '¿Ya registraste tu entrada en Buk?', 'Andrea', 'andrea@toroto.mx', '', '', '', '', '', '', '1', '2026-10-06', ''],
+    ['2026-10-06T15:05:00.000Z', 'k2', 'Buk', 'buk-e', 'q', 'Andrea', 'andrea@toroto.mx', '', '', '', '', '', '', '1', '2026-10-06', ''],
+  ];
+  const parsed = parseRespuestas(rows);
+  assert.equal(parsed[0].qCode, 'BD');
+  assert.equal(parsed[1].qCode, 'BD', 'el alias no debe ser sensible a mayúsculas/minúsculas');
+});
+
 test('currentQuestionFor rota el pool de Viernes y respeta el mes para BD/AL/BT', () => {
   const templates = [
     { mes: '', slot: 'VIERNES', mensaje: 'Pregunta viernes A' },
