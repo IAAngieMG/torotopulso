@@ -151,7 +151,9 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
     bdOnTimePct: entrada?.onTimePct ?? null,
-    bdOnTimeDetail: entrada ? `${entrada.yaRegistreCount} ya registraron · ${entrada.laRegistroAhoraCount} lo harán después` : null,
+    // Siempre en pasado ("avisaron que..."), nunca en futuro ("lo harán"): esta tarjeta reporta
+    // respuestas ya dadas, y el rango puede ser una semana pasada, no necesariamente "ahora".
+    bdOnTimeDetail: entrada ? `${entrada.yaRegistreCount} ya registraron su entrada · ${entrada.laRegistroAhoraCount} avisaron que la registrarían después` : null,
   };
 }
 
