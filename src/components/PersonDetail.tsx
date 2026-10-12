@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { fetchPersonDetail, DEFAULT_RANGE, type Me, type PersonDetail as PersonDetailData, type RangeOption, type SignalOption } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
-import { KpiGrid, RangeSignalControls, VacationBadge } from './PulseWidgets.tsx';
-
-const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
+import { KpiGrid, RangeSignalControls, VacationBadge, AiInsightCard } from './PulseWidgets.tsx';
 
 const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 function formatShortDate(dateKey: string): string {
@@ -125,23 +123,13 @@ export default function PersonDetail({
               )}
             </div>
 
-            <div className="rounded-xl border border-toroto-border bg-white p-4">
-              <p className="font-display font-semibold text-sm mb-3">Historial de respuestas</p>
-              {data.responses.length === 0 && <p className="text-sm text-slate-500">Sin respuestas en este rango.</p>}
-              <div className="divide-y divide-toroto-border">
-                {data.responses.map((r, i) => (
-                  <div key={i} className="py-2 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500">{QCODE_LABEL[r.qCode] || r.qCode}</p>
-                      <p className="text-sm text-[#0b1c30]">{r.question}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold">{r.rawScore != null ? `${r.rawScore}/5` : '—'}</p>
-                      <p className="text-[11px] text-slate-400">{new Date(r.timestamp).toLocaleString('es-MX')}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <p className="font-display font-semibold text-sm mb-3">Análisis · semana pasada</p>
+              {data.lastWeekInsight.headline ? (
+                <AiInsightCard insight={data.lastWeekInsight} title="Pulso IA · semana pasada" />
+              ) : (
+                <p className="text-sm text-slate-500">Sin respuestas de la semana pasada para analizar.</p>
+              )}
             </div>
           </>
         )}

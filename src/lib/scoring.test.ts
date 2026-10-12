@@ -79,6 +79,22 @@ test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
   assert.deepEqual(points.map(p => p.day), ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
 });
 
+test('computeWeeklySeries calcula bdOnTimePct por día a partir del check-in por botones (no una calificación 1-5)', () => {
+  const now = new Date('2026-10-09T12:00:00'); // viernes 9 de octubre de 2026
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }), // martes, 09:05 CDMX, a tiempo
+    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-07T19:00:00.000Z' }), // miércoles, 13:00 CDMX, tarde
+  ];
+  const points = computeWeeklySeries(records, now, 'week');
+  const tuesday = points.find(p => p.day === 'Martes');
+  const wednesday = points.find(p => p.day === 'Miércoles');
+  const thursday = points.find(p => p.day === 'Jueves');
+  assert.equal(tuesday?.bdOnTimePct, 100);
+  assert.equal(tuesday?.bd, null, 'BD por botones no tiene calificación 1-5');
+  assert.equal(wednesday?.bdOnTimePct, 0);
+  assert.equal(thursday?.bdOnTimePct, null, 'sin respuestas BD ese día');
+});
+
 test('computeEnergyDistribution reparte por el choice de AL', () => {
   const records = [
     rec({ qCode: 'AL', choice: 5 }),
