@@ -575,7 +575,7 @@ export async function createApp() {
       redFlags: computeRedFlagsForPerson(targetEmail, allPersonRecords, new Date()),
       vacationLabel: vacation ? vacationLabel(vacation) : null,
       pollyHistory: pollyHistoryFor(targetEmail),
-      lastWeekInsight: buildAutoInsight(lastWeekKpis, lastWeekSeries, fullNameFor(targetEmail), lastWeekRecords),
+      lastWeekInsight: buildAutoInsight(lastWeekKpis, lastWeekSeries, fullNameFor(targetEmail), lastWeekRecords, true),
     });
   });
 
