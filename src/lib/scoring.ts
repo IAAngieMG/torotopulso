@@ -105,6 +105,13 @@ export interface OverviewKpis {
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;
+  /** % de respuestas de "Inicio del día" (check-in por botones) que llegaron a tiempo (9:00-9:30 am
+   * CDMX) — `null` si no hubo respuestas BD de este formato en el rango. Reemplaza a `bdAverage`
+   * como el dato relevante para ese slot, que ya no trae calificación 1-5. */
+  bdOnTimePct: number | null;
+  /** Reparto de los dos botones del check-in ("Ya registré mi entrada" / "La registro ahora, por la
+   * tarde"), ej. "3 ya registraron su entrada · 1 la registrará después" — `null` junto con `bdOnTimePct`. */
+  bdOnTimeDetail: string | null;
 }
 
 /** Filtra por señal (BD/AL/BT/VIERNES) o regresa todo si la señal es 'ALL'/vacía. */
@@ -135,6 +142,7 @@ export function kpisForPersonInRange(
 export function computeKpis(records: ResponseRecord[], rosterSize: number): OverviewKpis {
   const respondents = new Set(records.map(r => r.email).filter(Boolean));
   const participationPct = rosterSize > 0 ? Math.round((respondents.size / rosterSize) * 1000) / 10 : null;
+  const entrada = computeEntradaInsight(records);
   return {
     bdAverage: average(scores(records, 'BD')),
     btAverage: average(scores(records, 'BT')),
@@ -142,6 +150,8 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
+    bdOnTimePct: entrada?.onTimePct ?? null,
+    bdOnTimeDetail: entrada ? `${entrada.yaRegistreCount} ya registraron · ${entrada.laRegistroAhoraCount} lo harán después` : null,
   };
 }
 
