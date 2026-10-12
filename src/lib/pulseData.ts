@@ -30,6 +30,19 @@ const toNumberOrNull = (v: string): number | null => {
   return v !== '' && Number.isFinite(n) ? n : null;
 };
 
+/**
+ * El check-in de entrada por botones llega del Sheet con el código "BUK-E" (del nombre de la
+ * encuesta en Buk), no "BD" — sin este alias, todo lo que filtra por `qCode === 'BD'`
+ * (`computeKpis`, `computeEntradaInsight`, red flags de "Inicio del día"...) nunca encontraba sus
+ * respuestas, y encima `isFridaySignal` las contaba por error como encuesta de Viernes al no
+ * reconocer "BUK-E" como uno de los slots diarios.
+ */
+const QCODE_ALIASES: Record<string, string> = { 'BUK-E': 'BD' };
+
+function normalizeQCode(raw: string): string {
+  return QCODE_ALIASES[raw.trim().toUpperCase()] ?? raw;
+}
+
 /** Parses `Respuestas`. */
 export function parseRespuestas(rows: string[][]): ResponseRecord[] {
   return rows
@@ -39,7 +52,7 @@ export function parseRespuestas(rows: string[][]): ResponseRecord[] {
       timestamp: cell(row, 0),
       responseKey: cell(row, 1),
       surveyName: cell(row, 2),
-      qCode: cell(row, 3),
+      qCode: normalizeQCode(cell(row, 3)),
       question: cell(row, 4),
       respondentName: cell(row, 5),
       email: cell(row, 6).toLowerCase(),
