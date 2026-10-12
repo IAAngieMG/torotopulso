@@ -65,7 +65,7 @@ test('computeKpis calcula bdOnTimePct/bdOnTimeDetail del check-in por botones de
   ];
   const kpis = computeKpis(records, 2);
   assert.equal(kpis.bdOnTimePct, 50);
-  assert.equal(kpis.bdOnTimeDetail, '1 ya registraron · 1 lo harán después');
+  assert.equal(kpis.bdOnTimeDetail, '1 ya registraron su entrada · 1 avisaron que la registrarían después');
 });
 
 test('overallAverage promedia TODAS las respuestas calificadas (BD, AL, BT, Viernes), no solo BD/BT', () => {
@@ -238,7 +238,7 @@ test('buildAutoInsight basa el clima en BT cuando BD es de botones (sin rawScore
     participationDetail: '2 de 2 personas',
     onTimePct: null,
     bdOnTimePct: 50,
-    bdOnTimeDetail: '1 ya registraron · 1 lo harán después',
+    bdOnTimeDetail: '1 ya registraron su entrada · 1 avisaron que la registrarían después',
   };
   const records = [
     rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
