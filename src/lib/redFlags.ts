@@ -11,16 +11,22 @@ import { activeVacation } from './vacations.ts';
  * Ninguna red flag se dispara por un incidente aislado de un solo día: todas piden un patrón de
  * más de `PATTERN_DAYS_THRESHOLD` (3) días hábiles de la semana pasada, no menos:
  *  - Silencio: no respondió ninguna encuesta.
- *  - Inicio del día (BD) tarde: respondió después de las 10:00 am hora CDMX.
- *  - Alimentos / Cierre del día (AL/BT) sin contestar: días en los que sí participó (respondió
- *    algo) pero se saltó ese slot puntual.
- *  - Calificación baja: respuestas con calificación menor a 4/5.
+ *  - Inicio del día (BD): mide únicamente si el check-in se hizo a tiempo, máximo 9:30 am hora
+ *    CDMX — no es una medida de calificación/ánimo, solo de puntualidad.
+ *  - Alimentos (AL): mide únicamente participación (si contestó o no ese slot); el contenido de
+ *    la respuesta siempre es positivo (son emojis, no una calificación de calidad), así que
+ *    nunca baja el ánimo — no participar es una flag informativa, no una caída de ánimo.
+ *  - Cierre del día (BT) sin contestar: días en los que sí participó (respondió algo) pero se
+ *    saltó ese slot puntual.
+ *  - Calificación baja: el único dato que puede reflejar una baja de ánimo es la calificación de
+ *    "Cierre del día" (BT) por debajo de 3/5 — ninguna otra encuesta genera esta flag, y una
+ *    calificación de 3/5 o más en Cierre del día nunca cuenta como baja.
  *
  * Los días hábiles en los que la persona estaba de vacaciones (src/lib/vacations.ts, alcance
- * "all") no cuentan para ningún patrón (ni como silencio ni como parte del denominador), y en
- * vez de eso generan una "vacation" flag informativa (severidad `media`, se ve amarilla, no
- * roja) con la leyenda de que no se esperaba respuesta esos días — no es una red flag real. Los
- * días hábiles fuera del rango de vacaciones de esa misma semana siguen las reglas normales.
+ * "all") no cuentan para ningún patrón (ni como silencio ni como parte del denominador) — las
+ * vacaciones nunca son una red flag, ni siquiera informativa; ya se muestran aparte junto al
+ * nombre de la persona (`vacationLabel`/`VacationBadge`). Los días hábiles fuera del rango de
+ * vacaciones de esa misma semana siguen las reglas normales.
  *
  * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
  * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
@@ -31,14 +37,16 @@ import { activeVacation } from './vacations.ts';
 
 const MEXICO_TZ = 'America/Mexico_City';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const LOW_SCORE_THRESHOLD = 4;
-const LATE_MORNING_HOUR = 10;
+/** Única calificación que puede marcar baja de ánimo: "Cierre del día" (BT) por debajo de 3/5. */
+const LOW_SCORE_THRESHOLD = 3;
+/** "Inicio del día" se considera a tiempo hasta las 9:30 am hora CDMX, inclusive. */
+const LATE_CHECKIN_MINUTE_OF_DAY = 9 * 60 + 30;
 /** Ninguna red flag se dispara por un solo día: todas piden más de este número de días con el patrón. */
 const PATTERN_DAYS_THRESHOLD = 3;
 const MAX_FLAGS_PER_PERSON = 6;
 const CONTEXT_PRIOR_WEEKS = 3;
 
-export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score' | 'vacation';
+export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
 export type RedFlagSeverity = 'alta' | 'media';
 
 export interface RedFlag {
@@ -55,18 +63,18 @@ export interface PersonRedFlags {
   recommendation: string;
 }
 
-const QCODE_LABEL: Record<string, string> = { BD: 'Inicio del día', AL: 'Alimentos', BT: 'Cierre del día' };
-
 function localDateKey(iso: string, tz = MEXICO_TZ): string {
   const d = new Date(iso);
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
-function localHour(iso: string, tz = MEXICO_TZ): number {
+/** Minutos desde medianoche hora local (ej. 9:30 am -> 570), para comparar contra un horario límite. */
+function localMinuteOfDay(iso: string, tz = MEXICO_TZ): number {
   const d = new Date(iso);
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).formatToParts(d);
-  const hourPart = parts.find(p => p.type === 'hour');
-  return hourPart ? Number(hourPart.value) : d.getHours();
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(d);
+  const hour = Number(parts.find(p => p.type === 'hour')?.value ?? d.getHours());
+  const minute = Number(parts.find(p => p.type === 'minute')?.value ?? d.getMinutes());
+  return hour * 60 + minute;
 }
 
 function localTimeLabel(iso: string, tz = MEXICO_TZ): string {
@@ -112,8 +120,9 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   const datesWithResponse = new Set(recent.map(r => localDateKey(r.timestamp)));
   const weekdays = weekdayKeysInRange(start, end);
   // Días hábiles de la semana evaluada en los que la persona estaba de vacaciones (alcance
-  // "all") — se excluyen del patrón de silencio (y de su denominador) y generan, en su lugar,
-  // la flag informativa de vacaciones más abajo. El resto de la semana sigue las reglas normales.
+  // "all") — se excluyen del patrón de silencio (y de su denominador). Las vacaciones nunca son
+  // una red flag (ni informativa): ya se muestran aparte junto al nombre de la persona. El resto
+  // de la semana sigue las reglas normales.
   const vacationDays = weekdays.filter(k => activeVacation(email, new Date(`${k}T12:00:00`))?.scope === 'all');
   const workWeekdays = weekdays.filter(k => !vacationDays.includes(k));
   const silentDays = workWeekdays.filter(k => !datesWithResponse.has(k)).length;
@@ -136,14 +145,14 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
 
   const lateMorningDays = activeDateKeys.filter(dateKey => {
     const bd = byDate.get(dateKey)!.find(r => r.qCode === 'BD');
-    return bd !== undefined && localHour(bd.timestamp) >= LATE_MORNING_HOUR;
+    return bd !== undefined && localMinuteOfDay(bd.timestamp) > LATE_CHECKIN_MINUTE_OF_DAY;
   });
   if (lateMorningDays.length > PATTERN_DAYS_THRESHOLD) {
     const latestBd = byDate.get(lateMorningDays[0])!.find(r => r.qCode === 'BD')!;
     flags.push({
       type: 'late_morning',
       severity: 'media',
-      message: `Respondió "Inicio del día" después de las 10:00 am en ${lateMorningDays.length} días de la semana pasada (el más reciente, a las ${localTimeLabel(latestBd.timestamp)} del ${dateLabel(lateMorningDays[0])}).`,
+      message: `Respondió "Inicio del día" después de las 9:30 am en ${lateMorningDays.length} días de la semana pasada (el más reciente, a las ${localTimeLabel(latestBd.timestamp)} del ${dateLabel(lateMorningDays[0])}).`,
     });
   }
 
@@ -165,11 +174,11 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     });
   }
 
-  // "Alimentos" (AL) se responde con emojis, no con una calificación de calidad — un 1 ahí no
-  // significa "mal", así que nunca cuenta para la red flag de calificación baja (solo importa si
-  // participó o no, ya cubierto arriba por "missing_response").
+  // Única calificación que puede marcar baja de ánimo: "Cierre del día" (BT). "Inicio del día"
+  // solo mide puntualidad (arriba) y "Alimentos" solo participación (ya cubierto por
+  // "missing_response") — ninguna de las dos genera esta flag, sin importar su calificación.
   const lowScoreRecords = [...recent]
-    .filter(r => r.qCode !== 'AL' && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
+    .filter(r => r.qCode === 'BT' && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const lowScoreDays = new Set(lowScoreRecords.map(r => localDateKey(r.timestamp)));
   if (lowScoreDays.size > PATTERN_DAYS_THRESHOLD) {
@@ -177,15 +186,7 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     flags.push({
       type: 'low_score',
       severity: 'alta',
-      message: `Calificación baja (menor a 4/5) en ${lowScoreDays.size} días de la semana pasada — la más reciente, ${latest.rawScore}/5 en "${QCODE_LABEL[latest.qCode] || latest.qCode}" el ${dateLabel(localDateKey(latest.timestamp))}.`,
-    });
-  }
-
-  if (vacationDays.length > 0) {
-    flags.push({
-      type: 'vacation',
-      severity: 'media',
-      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+      message: `Calificación baja en "Cierre del día" (menor a 3/5) en ${lowScoreDays.size} días de la semana pasada — la más reciente, ${latest.rawScore}/5 el ${dateLabel(localDateKey(latest.timestamp))}.`,
     });
   }
 
@@ -225,10 +226,10 @@ export function buildFlagContext(records: ResponseRecord[], now = new Date()): R
   const priorSilentDays = priorWeekdays.filter(k => !priorDatesWithResponse.has(k)).length;
   const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;
 
-  const priorAvgScore = average(prior.filter(r => r.qCode !== 'AL' && r.rawScore !== null).map(r => r.rawScore as number));
+  const priorAvgScore = average(prior.filter(r => r.qCode === 'BT' && r.rawScore !== null).map(r => r.rawScore as number));
 
   const priorBD = prior.filter(r => r.qCode === 'BD');
-  const recurringLateMorning = priorBD.length > 0 ? priorBD.filter(r => localHour(r.timestamp) >= LATE_MORNING_HOUR).length / priorBD.length >= 0.5 : null;
+  const recurringLateMorning = priorBD.length > 0 ? priorBD.filter(r => localMinuteOfDay(r.timestamp) > LATE_CHECKIN_MINUTE_OF_DAY).length / priorBD.length >= 0.5 : null;
 
   return { wasActiveBeforeSilence, priorAvgScore, recurringLateMorning };
 }
@@ -242,10 +243,6 @@ export function buildRecommendation(flags: RedFlag[], context: RedFlagContext = 
   const hasAlta = flags.some(f => f.severity === 'alta');
   const types = new Set(flags.map(f => f.type));
   const rhSuffix = hasAlta ? ' Si lo necesitas, pide apoyo a RH.' : '';
-
-  if (types.has('vacation') && types.size === 1) {
-    return 'Está de vacaciones esta semana — no se espera respuesta durante esos días, no es necesario dar seguimiento.';
-  }
 
   if (types.has('silence')) {
     if (context.wasActiveBeforeSilence === true) {
@@ -311,4 +308,35 @@ export function computeRedFlagsForRoster(roster: RosterPerson[], allRecords: Res
     if (aAlta !== bAlta) return aAlta - bAlta;
     return b.flags.length - a.flags.length;
   });
+}
+
+export interface VacationStatus {
+  email: string;
+  fullName: string;
+  team: string;
+  message: string;
+}
+
+/**
+ * Quién del roster estuvo de vacaciones (alcance "all") algún día hábil de la semana pasada —
+ * nunca es una red flag, así que vive aparte de `computeRedFlagsForRoster`: se muestra como una
+ * flag amarilla informativa en su propia sección, nunca mezclada ni contada junto a las red
+ * flags reales.
+ */
+export function computeVacationStatusForRoster(roster: RosterPerson[], now = new Date()): VacationStatus[] {
+  const { start, end } = rangeWindow('lastWeek', now);
+  const weekdays = weekdayKeysInRange(start, end);
+
+  const result: VacationStatus[] = [];
+  for (const person of roster) {
+    const vacationDays = weekdays.filter(k => activeVacation(person.email, new Date(`${k}T12:00:00`))?.scope === 'all');
+    if (vacationDays.length === 0) continue;
+    result.push({
+      email: person.email,
+      fullName: person.fullName,
+      team: person.team,
+      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+    });
+  }
+  return result;
 }

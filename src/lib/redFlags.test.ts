@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRedFlagsForPerson, computeRedFlagsForRoster, buildRecommendation, buildFlagContext } from './redFlags.ts';
+import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster, buildRecommendation, buildFlagContext } from './redFlags.ts';
 import type { ResponseRecord } from './pulseData.ts';
 
 // Lunes 28 de septiembre 2026 -> "semana pasada" = lunes 21 a viernes 25 de septiembre.
@@ -65,16 +65,30 @@ test('responder Inicio del día tarde UN SOLO día no genera red flag de tardanz
   assert.ok(!flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
 });
 
-test('responder Inicio del día tarde en 4 de 5 días sí genera red flag de tardanza', () => {
+test('responder Inicio del día tarde (después de 9:30 am CDMX) en 4 de 5 días sí genera red flag de tardanza', () => {
   const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T16:30:00.000Z`, qCode: 'BD' }));
   const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   assert.ok(flags.some(f => f.type === 'late_morning' && f.message.includes('4 días')), JSON.stringify(flags));
 });
 
-test('responder Inicio del día antes de las 10:00 am hora CDMX no genera red flag de tardanza', () => {
+test('responder Inicio del día antes de las 9:30 am hora CDMX no genera red flag de tardanza', () => {
   // 14:00 UTC == 8:00 am CDMX
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BD' })], NOW);
   assert.ok(!flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
+});
+
+test('check-in exactamente a las 9:30 am CDMX cuenta como a tiempo, no tarde', () => {
+  // 15:30 UTC == 9:30 am CDMX, el límite exacto.
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T15:30:00.000Z`, qCode: 'BD' }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(!flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
+});
+
+test('check-in a las 9:31 am CDMX ya cuenta como tarde', () => {
+  // 15:31 UTC == 9:31 am CDMX, un minuto después del límite.
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T15:31:00.000Z`, qCode: 'BD' }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(flags.some(f => f.type === 'late_morning'), JSON.stringify(flags));
 });
 
 test('un solo día activo sin responder Alimentos ni Cierre del día NO genera red flag de faltante (no es un patrón)', () => {
@@ -104,15 +118,21 @@ test('completar los 3 slots de un día no genera red flags de faltante ese día'
   assert.ok(!flags.some(f => f.type === 'missing_response'), JSON.stringify(flags));
 });
 
-test('una sola calificación menor a 4 NO genera red flag de calificación baja (no es un patrón)', () => {
+test('una sola calificación menor a 3 en Cierre del día NO genera red flag de calificación baja (no es un patrón)', () => {
   const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-09-21T14:00:00.000Z', qCode: 'BT', rawScore: 2 })], NOW);
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('calificación menor a 4 en 4 de 5 días sí genera red flag de calificación baja', () => {
+test('calificación menor a 3 en "Cierre del día" en 4 de 5 días sí genera red flag de calificación baja', () => {
   const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BT', rawScore: 2 }));
   const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   assert.ok(flags.some(f => f.type === 'low_score' && f.message.includes('2/5') && f.message.includes('4 días')), JSON.stringify(flags));
+});
+
+test('una calificación de "Cierre del día" de 3/5 (no menor a 3) nunca genera red flag de calificación baja', () => {
+  const records = WEEKDAYS_LAST_WEEK.map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BT', rawScore: 3 }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
 test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un 1/2 ahí nunca es red flag de calificación baja', () => {
@@ -125,7 +145,13 @@ test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('una calificación de 4 o más no genera red flag', () => {
+test('"Inicio del día" (BD) solo mide puntualidad: ninguna calificación baja ahí genera red flag de calificación baja', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1 }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
+});
+
+test('una calificación de 4 o más en Cierre del día no genera red flag', () => {
   const flags = computeRedFlagsForPerson(
     EMAIL,
     [
@@ -138,38 +164,33 @@ test('una calificación de 4 o más no genera red flag', () => {
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('quien está de vacaciones (alcance "all") toda la semana no genera red flags reales, solo la flag informativa de vacaciones', () => {
+test('quien está de vacaciones (alcance "all") toda la semana no genera ninguna red flag: las vacaciones nunca son una red flag', () => {
   const flags = computeRedFlagsForPerson('emiliano@toroto.mx', [], NOW);
-  assert.deepEqual(flags, [
-    { type: 'vacation', severity: 'media', message: 'De vacaciones 5 de 5 días hábiles de la semana pasada — no se espera respuesta esos días.' },
-  ]);
+  assert.deepEqual(flags, []);
 });
 
-test('vacaciones de solo parte de la semana: los días de vacaciones no cuentan para el umbral de silencio, solo generan la flag informativa', () => {
+test('vacaciones de solo parte de la semana: los días de vacaciones no cuentan para el umbral de silencio', () => {
   // Valentina está de vacaciones del 8 al 12 de octubre de 2026. Con "now" = lunes 12 de
   // octubre, "semana pasada" = lunes 5 a viernes 9 — de esos, jueves 8 y viernes 9 son de
   // vacaciones (2 días); quedan 3 días hábiles normales (lun-mié), en los que no respondió
-  // nada: 3 no supera el umbral (>3), así que no hay red flag de silencio real.
+  // nada: 3 no supera el umbral (>3), así que no hay red flag de silencio, ni ninguna otra.
   const now = new Date('2026-10-12T15:00:00.000Z');
   const flags = computeRedFlagsForPerson('valentina@toroto.mx', [], now);
-  assert.ok(!flags.some(f => f.type === 'silence'), JSON.stringify(flags));
-  assert.ok(flags.some(f => f.type === 'vacation' && f.message.includes('2 de 5')), JSON.stringify(flags));
+  assert.deepEqual(flags, []);
 });
 
-test('fuera del rango de vacaciones, si sigue sin contestar más de 3 días hábiles sí genera la red flag real de silencio, además de la de vacaciones', () => {
+test('fuera del rango de vacaciones, si sigue sin contestar más de 3 días hábiles sí genera la red flag real de silencio', () => {
   // Con "now" = lunes 19 de octubre, "semana pasada" = lunes 12 a viernes 16 — de esos, solo
   // el lunes 12 cae en el rango de vacaciones (termina el 12); los otros 4 días hábiles son
   // normales y, sin ninguna respuesta, sí superan el umbral de silencio.
   const now = new Date('2026-10-19T15:00:00.000Z');
   const flags = computeRedFlagsForPerson('valentina@toroto.mx', [], now);
   assert.ok(flags.some(f => f.type === 'silence'), JSON.stringify(flags));
-  assert.ok(flags.some(f => f.type === 'vacation'), JSON.stringify(flags));
 });
 
 test('fuera de su rango de vacaciones (que empieza el 5 de octubre), David sigue generando red flags normales', () => {
   const flags = computeRedFlagsForPerson('david@toroto.mx', [], NOW);
   assert.ok(flags.some(f => f.type === 'silence'), 'la semana evaluada (21-25 sept) es antes de que empiecen sus vacaciones');
-  assert.ok(!flags.some(f => f.type === 'vacation'), JSON.stringify(flags));
 });
 
 test('buildRecommendation sugiere apoyo de RH cuando hay una red flag de severidad alta', () => {
@@ -195,7 +216,7 @@ test('buildRecommendation menciona la caída repentina de calificación cuando s
 
 test('buildRecommendation no habla de caída repentina si el promedio previo también era bajo', () => {
   const flags = [{ type: 'low_score' as const, severity: 'alta' as const, message: '' }];
-  const rec = buildRecommendation(flags, { wasActiveBeforeSilence: null, priorAvgScore: 3, recurringLateMorning: null });
+  const rec = buildRecommendation(flags, { wasActiveBeforeSilence: null, priorAvgScore: 2, recurringLateMorning: null });
   assert.doesNotMatch(rec, /golpe/);
   assert.match(rec, /tiempo bajas/);
 });
@@ -212,13 +233,13 @@ test('buildFlagContext detecta que la persona sí era activa antes de la semana 
     '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11',
     '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18',
   ];
-  const priorRecords = priorDays.map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 5 }));
+  const priorRecords = priorDays.map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BT', rawScore: 5 }));
   const context = buildFlagContext(priorRecords, NOW);
   assert.equal(context.wasActiveBeforeSilence, true);
   assert.equal(context.priorAvgScore, 5);
 });
 
-test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag (real o de vacaciones)', () => {
+test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag real; las vacaciones nunca cuentan como una', () => {
   const roster = [
     { email: 'sana@toroto.mx', fullName: 'Sana', team: 'Equipo' },
     { email: 'silenciosa@toroto.mx', fullName: 'Silenciosa', team: 'Equipo' },
@@ -231,10 +252,25 @@ test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red fl
     record({ email: 'sana@toroto.mx', timestamp: `${day}T23:00:00.000Z`, qCode: 'BT' }),
   ]);
   // Silenciosa no respondió nada la semana pasada: red flag real de silencio.
-  // Emiliano tampoco respondió nada, pero toda su semana fue de vacaciones: solo la flag
-  // informativa de vacaciones, no una red flag real, pero igual aparece en el resultado.
+  // Emiliano tampoco respondió nada, pero toda su semana fue de vacaciones: las vacaciones
+  // nunca son una red flag, así que no aparece en el resultado.
   const result = computeRedFlagsForRoster(roster, records, NOW);
-  assert.deepEqual(result.map(p => p.email).sort(), ['emiliano@toroto.mx', 'silenciosa@toroto.mx']);
-  const emiliano = result.find(p => p.email === 'emiliano@toroto.mx')!;
-  assert.ok(emiliano.flags.every(f => f.type === 'vacation'));
+  assert.deepEqual(result.map(p => p.email).sort(), ['silenciosa@toroto.mx']);
+});
+
+test('computeVacationStatusForRoster regresa como flag amarilla, separada de las red flags, a quien estuvo de vacaciones', () => {
+  const roster = [
+    { email: 'sana@toroto.mx', fullName: 'Sana', team: 'Equipo' },
+    { email: 'emiliano@toroto.mx', fullName: 'Emiliano', team: 'Equipo' },
+  ];
+  const vacations = computeVacationStatusForRoster(roster, NOW);
+  assert.deepEqual(vacations.map(v => v.email), ['emiliano@toroto.mx']);
+  assert.match(vacations[0].message, /De vacaciones 5 de 5 días hábiles/);
+});
+
+test('computeVacationStatusForRoster solo cuenta los días hábiles de vacaciones dentro de la semana evaluada', () => {
+  const roster = [{ email: 'valentina@toroto.mx', fullName: 'Valentina', team: 'Equipo' }];
+  const now = new Date('2026-10-12T15:00:00.000Z');
+  const vacations = computeVacationStatusForRoster(roster, now);
+  assert.match(vacations[0].message, /2 de 5/);
 });
