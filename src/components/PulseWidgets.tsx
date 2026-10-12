@@ -79,7 +79,12 @@ export function KpiCard({ label, value, suffix, detail }: { label: string; value
 export function KpiGrid({ kpis }: { kpis: Kpis }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <KpiCard label="Inicio del día (BD)" value={kpis.bdAverage != null ? kpis.bdAverage.toFixed(1) : '—'} suffix="/ 5" />
+      <KpiCard
+        label={kpis.bdOnTimePct != null ? 'Inicio del día · % a tiempo' : 'Inicio del día (BD)'}
+        value={kpis.bdOnTimePct != null ? `${kpis.bdOnTimePct}%` : kpis.bdAverage != null ? kpis.bdAverage.toFixed(1) : '—'}
+        suffix={kpis.bdOnTimePct == null && kpis.bdAverage != null ? '/ 5' : undefined}
+        detail={kpis.bdOnTimePct != null ? (kpis.bdOnTimeDetail ?? undefined) : undefined}
+      />
       <KpiCard label="Cierre del día (BT)" value={kpis.btAverage != null ? kpis.btAverage.toFixed(1) : '—'} suffix="/ 5" />
       <KpiCard
         label="Participación"

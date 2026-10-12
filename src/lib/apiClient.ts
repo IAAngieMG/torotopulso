@@ -88,6 +88,8 @@ export interface Kpis {
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;
+  bdOnTimePct: number | null;
+  bdOnTimeDetail: string | null;
 }
 
 export interface DailyPoint {
