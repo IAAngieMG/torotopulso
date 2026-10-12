@@ -134,12 +134,13 @@ export const ORG_TEAMS: OrgTeam[] = [
     members: [m('Renán Gonzalez Hoyos', 'renan@toroto.mx')],
   },
   {
+    // María José Cantoral Santos ya no está en Toroto; Yenifer Arias entra en su lugar.
     name: 'Gestión de Proyectos_Andrea del Rocío',
     leader: m('Andrea del Rocío Bárcenas García', 'andrea@toroto.mx'),
     members: [
       m('Juan José Romero Martínez', 'juanjose@toroto.mx'),
       m('Jenrry Octabio Santiago Alvarez', 'octabio@toroto.mx'),
-      m('María José Cantoral Santos', 'cantoral@toroto.mx'),
+      m('Yenifer Arias', 'yenifer@toroto.mx'),
     ],
   },
   {
