@@ -333,3 +333,29 @@ export function fetchLaunchRequest() {
 export function dismissLaunchRequest() {
   return api('/api/recognitions/launch/dismiss', { method: 'POST' });
 }
+
+export interface ApiTokenInfo {
+  id: string;
+  email: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export function fetchApiTokens() {
+  return api('/api/tokens') as Promise<{ tokens: ApiTokenInfo[] }>;
+}
+
+/** El `token` crudo solo viene en esta respuesta — después solo se guarda su hash en el servidor. */
+export function createApiToken(label: string) {
+  return api('/api/tokens', { method: 'POST', body: JSON.stringify({ label }) }) as Promise<{
+    id: string;
+    label: string;
+    token: string;
+    createdAt: string;
+  }>;
+}
+
+export function revokeApiToken(id: string) {
+  return api(`/api/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}

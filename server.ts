@@ -6,6 +6,15 @@ import type { Request, Response, NextFunction } from 'express';
 import { getStore } from '@netlify/blobs';
 import { GoogleGenAI } from '@google/genai';
 import { signSession, verifySession, type SignedSession } from './src/lib/sessionToken.ts';
+import {
+  API_TOKEN_PREFIX,
+  canCreateMoreTokens,
+  cleanLabel,
+  findApiTokenByRaw,
+  generateApiToken,
+  isReadOnlyPulseRoute,
+  type ApiTokenRecord,
+} from './src/lib/apiTokens.ts';
 import { fetchSheetRows } from './src/lib/sheets.ts';
 import { parseNominations, type Nomination } from './src/lib/recognitionData.ts';
 import {
@@ -215,6 +224,32 @@ async function generateDiplomaWithAI(rawText: string, tone: 'formal' | 'calido')
   };
 }
 
+// --- Tokens personales de API: permiten que una persona conecte su propio Claude/herramienta a
+// sus datos de Pulso (solo lectura: GET /api/me y GET /api/pulse/*), con el mismo alcance que ya
+// ve en el dashboard (resolveOrgAccess por su correo) — ver auth() y isReadOnlyPulseRoute(). ---
+const apiTokensFile = path.resolve(process.env.API_TOKENS_FILE || './data/pulso-api-tokens.json');
+
+async function loadApiTokens(): Promise<Record<string, ApiTokenRecord>> {
+  if (useNetlifyBlobs) {
+    const remote = await blobsStore('pulso-toroto').get('apiTokens', { type: 'json' });
+    return remote && typeof remote === 'object' ? (remote as Record<string, ApiTokenRecord>) : {};
+  }
+  try {
+    return JSON.parse(fs.readFileSync(apiTokensFile, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+async function saveApiTokens(tokens: Record<string, ApiTokenRecord>) {
+  if (useNetlifyBlobs) {
+    await blobsStore('pulso-toroto').setJSON('apiTokens', tokens);
+    return;
+  }
+  fs.mkdirSync(path.dirname(apiTokensFile), { recursive: true });
+  fs.writeFileSync(apiTokensFile, JSON.stringify(tokens, null, 2));
+}
+
 // --- Solicitud de lanzamiento de Santiago: dispara la alerta que ven Angie/Karla ---
 interface LaunchRequest {
   requestedBy: string;
@@ -254,8 +289,26 @@ function currentRecognitionMonth(): string {
 }
 
 // --- Express app -------------------------------------------------------------
-function auth(req: Request, res: Response, next: NextFunction) {
+async function auth(req: Request, res: Response, next: NextFunction) {
   const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (t.startsWith(API_TOKEN_PREFIX)) {
+    // req.path es relativo al punto de montaje ('/api'), ej. '/pulse/overview' o '/me'.
+    if (!isReadOnlyPulseRoute(req.method, req.path)) {
+      return res.status(403).json({ error: 'Este token de API solo puede leer datos de Pulso (GET /api/pulse/* y /api/me).' });
+    }
+    try {
+      const tokens = await loadApiTokens();
+      const record = findApiTokenByRaw(tokens, t);
+      if (!record) return res.status(401).json({ error: 'Token de API inválido o revocado.' });
+      (req as any).session = { email: record.email, name: record.label || record.email, expiresAt: Infinity } as SignedSession;
+      (req as any).isApiToken = true;
+      tokens[record.id] = { ...record, lastUsedAt: new Date().toISOString() };
+      saveApiTokens(tokens).catch(() => {});
+      return next();
+    } catch {
+      return res.status(502).json({ error: 'No fue posible validar el token de API.' });
+    }
+  }
   const s = verifySessionToken(t);
   if (!s) return res.status(401).json({ error: 'Sesión requerida o expirada.' });
   (req as any).session = s;
@@ -355,6 +408,57 @@ export async function createApp() {
       canUseViewAs,
       viewAsOptions: canUseViewAs ? allViewAsTargets([session.email]) : [],
     });
+  });
+
+  // Autoservicio para conectar herramientas externas (ej. un asistente personal) a los propios
+  // datos de Pulso de alguien, sin compartir su sesión de Google. Un token de API no puede crear
+  // ni listar otros tokens (auth() ya lo bloquea por no ser una ruta de solo lectura de Pulso).
+  app.post('/api/tokens', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const label = cleanLabel(req.body?.label) || 'Token sin nombre';
+      const tokens = await loadApiTokens();
+      if (!canCreateMoreTokens(tokens, session.email)) {
+        return res.status(400).json({ error: 'Ya tienes el máximo de tokens activos. Revoca alguno antes de crear otro.' });
+      }
+      const { raw, hash } = generateApiToken();
+      const id = `tok-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const record: ApiTokenRecord = { id, email: session.email, label, tokenHash: hash, createdAt: new Date().toISOString(), lastUsedAt: null };
+      tokens[id] = record;
+      await saveApiTokens(tokens);
+      res.status(201).json({ id, label, token: raw, createdAt: record.createdAt });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible crear el token.' });
+    }
+  });
+
+  app.get('/api/tokens', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const tokens = await loadApiTokens();
+      const mine = Object.values(tokens)
+        .filter(t => t.email === session.email)
+        .map(({ tokenHash: _tokenHash, ...rest }) => rest)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      res.json({ tokens: mine });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible cargar tus tokens.' });
+    }
+  });
+
+  app.delete('/api/tokens/:id', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const id = clean(req.params.id, 100);
+      const tokens = await loadApiTokens();
+      const record = tokens[id];
+      if (!record || record.email !== session.email) return res.status(404).json({ error: 'Token no encontrado.' });
+      delete tokens[id];
+      await saveApiTokens(tokens);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible revocar el token.' });
+    }
   });
 
   app.get('/api/pulse/overview', async (req, res) => {
