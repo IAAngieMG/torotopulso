@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
-import { LogOut, Home, MessageCircleHeart, Award } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { LogOut, Home, MessageCircleHeart, Award, KeyRound } from 'lucide-react';
 import { TOKEN_KEY, type Me } from '../lib/apiClient.ts';
+import ApiTokensModal from './ApiTokensModal.tsx';
 
 interface ShellProps {
   me: Me;
@@ -10,6 +11,7 @@ interface ShellProps {
 }
 
 export default function Shell({ me, view, onNavigate, children }: ShellProps) {
+  const [showApiTokens, setShowApiTokens] = useState(false);
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     location.reload();
@@ -33,6 +35,9 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
             <p className="text-xs text-white/50 mb-3">{me.email}</p>
             <button onClick={logout} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
               <LogOut size={14} /> Cerrar sesión
+            </button>
+            <button onClick={() => setShowApiTokens(true)} className="flex items-center gap-2 text-sm text-white/70 hover:text-white mt-2">
+              <KeyRound size={14} /> Acceso API
             </button>
           </div>
           <nav className="flex md:flex-col gap-1 flex-1">
@@ -64,6 +69,7 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
       </aside>
 
       <main className="flex-1 min-w-0">{children}</main>
+      {showApiTokens && <ApiTokensModal onClose={() => setShowApiTokens(false)} />}
     </div>
   );
 }
