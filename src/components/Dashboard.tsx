@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Globe2, Users, User, Star } from 'lucide-react';
 import type { Me } from '../lib/apiClient.ts';
-import { TopBar, ReconocimientosCard } from './Shell.tsx';
+import { TopBar } from './Shell.tsx';
 import Overview from './Overview.tsx';
 import TeamsTable from './TeamsTable.tsx';
 import PeopleList from './PeopleList.tsx';
@@ -24,10 +24,9 @@ interface DashboardProps {
   onSetViewAs: (email: string) => void;
   onOpenTeam: (team: string) => void;
   onOpenPerson: (email: string) => void;
-  onOpenRecognitions: () => void;
 }
 
-export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, onOpenRecognitions }: DashboardProps) {
+export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('general');
   const isVisionGlobal = me.visionGlobal;
   // Personas/Líderes/Equipos ya no son exclusivos de visión global: cualquier líder con acceso
@@ -40,8 +39,6 @@ export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson, o
       <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
         <RedFlagsPanel onOpenPerson={onOpenPerson} />
-
-        {me.canViewRecognitions && <ReconocimientosCard onOpenRecognitions={onOpenRecognitions} isManager={me.canManageRecognitions} />}
 
         {showTabs && (
           <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">
