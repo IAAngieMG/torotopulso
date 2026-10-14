@@ -315,6 +315,7 @@ export interface VacationStatus {
   fullName: string;
   team: string;
   message: string;
+  isMaternity: boolean;
 }
 
 /**
@@ -331,11 +332,15 @@ export function computeVacationStatusForRoster(roster: RosterPerson[], now = new
   for (const person of roster) {
     const vacationDays = weekdays.filter(k => activeVacation(person.email, new Date(`${k}T12:00:00`))?.scope === 'all');
     if (vacationDays.length === 0) continue;
+    const period = activeVacation(person.email, new Date(`${vacationDays[0]}T12:00:00`));
+    const reason = period?.reason ?? 'De vacaciones';
+    const isMaternity = /matern/i.test(reason);
     result.push({
       email: person.email,
       fullName: person.fullName,
       team: person.team,
-      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+      message: `${reason} ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+      isMaternity,
     });
   }
   return result;

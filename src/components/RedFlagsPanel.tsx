@@ -90,18 +90,22 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
       )}
 
       {vacations.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 overflow-hidden">
           <button
             onClick={() => setVacationsExpanded(v => !v)}
-            className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-amber-100/50 transition-colors"
+            className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-emerald-100/50 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Palmtree size={16} className="text-amber-600" />
-              <span className="font-display font-semibold text-sm text-amber-900">
+              <Palmtree size={16} className="text-emerald-600" />
+              <span className="font-display font-semibold text-sm text-emerald-900">
                 De vacaciones · {vacations.length} persona{vacations.length === 1 ? '' : 's'}
               </span>
             </span>
-            {vacationsExpanded ? <ChevronUp size={16} className="text-amber-700" /> : <ChevronDown size={16} className="text-amber-700" />}
+            {vacationsExpanded ? (
+              <ChevronUp size={16} className="text-emerald-700" />
+            ) : (
+              <ChevronDown size={16} className="text-emerald-700" />
+            )}
           </button>
           {vacationsExpanded && (
             <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
@@ -109,14 +113,16 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
                 <button
                   key={v.email}
                   onClick={() => onOpenPerson(v.email)}
-                  className="text-left rounded-lg border border-amber-200 p-3 bg-white hover:border-toroto-primary transition-colors"
+                  className={`text-left rounded-lg border p-3 bg-white hover:border-toroto-primary transition-colors ${
+                    v.isMaternity ? 'border-pink-200' : 'border-emerald-200'
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
                     <ChevronRight size={14} className="text-slate-400 shrink-0" />
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
-                  <p className="text-xs text-amber-700 mt-2">{v.message}</p>
+                  <p className={`text-xs mt-2 ${v.isMaternity ? 'text-pink-700' : 'text-emerald-700'}`}>{v.message}</p>
                 </button>
               ))}
             </div>
