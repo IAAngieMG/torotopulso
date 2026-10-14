@@ -8,13 +8,15 @@ import PersonDetail from './components/PersonDetail.tsx';
 import FeedbackInbox from './components/FeedbackInbox.tsx';
 import RecognitionsAdmin from './components/RecognitionsAdmin.tsx';
 import RecognitionsGallery from './components/RecognitionsGallery.tsx';
+import InformeHerramienta from './components/InformeHerramienta.tsx';
 
 type View =
   | { name: 'overview' }
   | { name: 'team'; team: string }
   | { name: 'person'; email: string }
   | { name: 'feedback' }
-  | { name: 'recognitions' };
+  | { name: 'recognitions' }
+  | { name: 'informe' };
 
 /**
  * La vista completa vive en `location.hash` (no solo en estado de React) para que el botón de
@@ -34,6 +36,8 @@ function viewToHash(view: View): string {
       return '#/feedback';
     case 'recognitions':
       return '#/recognitions';
+    case 'informe':
+      return '#/informe';
   }
 }
 
@@ -43,6 +47,7 @@ function hashToView(hash: string): View {
   if (parts[0] === 'person' && parts[1]) return { name: 'person', email: decodeURIComponent(parts[1]) };
   if (parts[0] === 'feedback') return { name: 'feedback' };
   if (parts[0] === 'recognitions') return { name: 'recognitions' };
+  if (parts[0] === 'informe') return { name: 'informe' };
   return { name: 'overview' };
 }
 
@@ -123,6 +128,7 @@ export default function App() {
         <PersonDetail me={me} onSetViewAs={setViewAs} email={view.email} onBack={() => navigate({ name: 'overview' })} />
       )}
       {view.name === 'feedback' && me.canSeeFeedback && <FeedbackInbox me={me} />}
+      {view.name === 'informe' && me.visionGlobal && <InformeHerramienta me={me} onSetViewAs={setViewAs} />}
       {view.name === 'recognitions' &&
         me.canViewRecognitions &&
         (me.canManageRecognitions ? (

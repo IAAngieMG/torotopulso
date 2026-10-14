@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { LogOut, Home, MessageCircleHeart, Award } from 'lucide-react';
+import { LogOut, Home, MessageCircleHeart, Award, FileText } from 'lucide-react';
 import { TOKEN_KEY, type Me } from '../lib/apiClient.ts';
 
 interface ShellProps {
@@ -50,6 +50,17 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
               >
                 <MessageCircleHeart size={16} />
                 <span className="hidden md:inline">Feedback recibido</span>
+              </button>
+            )}
+            {me.visionGlobal && (
+              <button
+                onClick={() => onNavigate('informe')}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  view === 'informe' ? 'bg-toroto-primary text-white' : 'text-white/70 hover:bg-white/10'
+                }`}
+              >
+                <FileText size={16} />
+                <span className="hidden md:inline">Informe de la herramienta</span>
               </button>
             )}
           </nav>
