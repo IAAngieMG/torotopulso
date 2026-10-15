@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { LogOut, Home, MessageCircleHeart, Award, KeyRound } from 'lucide-react';
+import { LogOut, Home, MessageCircleHeart, KeyRound } from 'lucide-react';
 import { TOKEN_KEY, type Me } from '../lib/apiClient.ts';
 import ApiTokensModal from './ApiTokensModal.tsx';
 
@@ -127,45 +127,6 @@ export function TopBar({ me, extra, onSetViewAs }: { me: Me; extra?: ReactNode; 
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-/** Píldora festiva + indicador de Slack que acompañan el encabezado de las vistas de Reconocimientos. */
-export function ReconocimientosHeaderExtras() {
-  return (
-    <>
-      <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-        Reconocimientos del mes
-      </span>
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-toroto-border text-[#0b1c30] text-xs font-medium">
-        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-        Slack Conectado <span className="text-slate-400 font-normal">#reconocimientos</span>
-      </span>
-    </>
-  );
-}
-
-export function ReconocimientosCard({
-  onOpenRecognitions,
-  isManager,
-}: {
-  onOpenRecognitions: () => void;
-  isManager: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-toroto-border bg-white p-4">
-      <button onClick={onOpenRecognitions} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity w-full">
-        <div className="w-9 h-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-          <Award size={16} className="text-amber-600" />
-        </div>
-        <div>
-          <p className="font-display font-semibold text-sm">Reconocimientos del mes</p>
-          <p className="text-xs text-slate-500">
-            {isManager ? 'Revisa y publica los diplomas del mes.' : 'Ver a quién reconocimos este mes.'}
-          </p>
-        </div>
-      </button>
     </div>
   );
 }

@@ -24,14 +24,8 @@ export const RESTRICTED_ACCESS: Record<string, string> = {
   'samantha@toroto.mx': 'RH',
 };
 
-/** Quién puede ver Reconocimientos del mes (como gestor o solo para consultar), sin importar visión global. */
-export const RECOGNITIONS_VIEWER_EMAILS = ['santiago@toroto.mx', 'ti@toroto.mx', 'patricia@toroto.mx', 'samantha@toroto.mx', 'karla@toroto.mx'];
-
 /** Únicas cuentas que pueden ver el buzón de feedback interno ("Feedback recibido"). */
 export const FEEDBACK_INBOX_EMAILS = ['karla@toroto.mx', 'samantha@toroto.mx', 'ti@toroto.mx'];
-
-/** Karla y Angie son quienes generan, aprueban y publican los diplomas de Reconocimientos. */
-export const RECOGNITION_MANAGER_EMAILS = ['karla@toroto.mx', 'ti@toroto.mx'];
 
 /** Angie y Karla pueden simular cualquier perfil con acceso a la plataforma vía "Ver como". */
 export const VIEW_AS_MANAGER_EMAILS = ['ti@toroto.mx', 'karla@toroto.mx'];

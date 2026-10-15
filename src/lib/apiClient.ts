@@ -46,9 +46,6 @@ export interface Me {
   canSeeFeedback: boolean;
   /** Solo true para Angie — puede eliminar entradas del buzón de feedback ya solucionadas. */
   canDeleteFeedback: boolean;
-  canManageRecognitions: boolean;
-  /** Puede ver la sección de Reconocimientos del mes (como gestor o solo consultarla). */
-  canViewRecognitions: boolean;
   /** "Ver como": true mientras se está viendo el dashboard como otro perfil. */
   isViewingAs: boolean;
   /** True para las cuentas de Angie y Karla — controla si se muestra el selector "Ver como". */
@@ -254,85 +251,6 @@ export function fetchFeedbackInbox() {
 
 export function deleteFeedback(id: string) {
   return api(`/api/feedback/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-export interface Nomination {
-  id: string;
-  submittedAt: string;
-  month: string;
-  nominatorName: string;
-  nominatorEmail: string;
-  rawText: string;
-  record: RecognitionRecord | null;
-}
-
-export interface RecognitionRecord {
-  id: string;
-  month: string;
-  nominatorName: string;
-  nominatorEmail: string;
-  rawText: string;
-  nomineeName: string;
-  nomineeRole: string;
-  diplomaText: string;
-  tone: 'formal' | 'calido';
-  status: 'pendiente' | 'generado' | 'aprobado' | 'publicado' | 'rechazado';
-  reviewedBy?: string;
-  publishedAt?: string;
-}
-
-export function fetchPendingRecognitions() {
-  return api('/api/recognitions/pending') as Promise<{ month: string; pending: Nomination[] }>;
-}
-
-export function generateDiploma(id: string, tone: 'formal' | 'calido') {
-  return api(`/api/recognitions/${encodeURIComponent(id)}/generate`, {
-    method: 'POST',
-    body: JSON.stringify({ tone }),
-  }) as Promise<{ record: RecognitionRecord }>;
-}
-
-export function approveDiploma(id: string, nomineeName?: string, nomineeRole?: string, diplomaText?: string) {
-  return api(`/api/recognitions/${encodeURIComponent(id)}/approve`, {
-    method: 'POST',
-    body: JSON.stringify({ nomineeName, nomineeRole, diplomaText }),
-  }) as Promise<{ record: RecognitionRecord }>;
-}
-
-export function rejectNomination(id: string) {
-  return api(`/api/recognitions/${encodeURIComponent(id)}/reject`, { method: 'POST' });
-}
-
-export function publishRecognitions() {
-  return api('/api/recognitions/publish', { method: 'POST' }) as Promise<{ published: number; month: string }>;
-}
-
-export function fetchPublishedRecognitions(month?: string) {
-  const q = month ? `?month=${encodeURIComponent(month)}` : '';
-  return api(`/api/recognitions/published${q}`) as Promise<{ month: string; diplomas: RecognitionRecord[] }>;
-}
-
-export interface LaunchRequest {
-  requestedBy: string;
-  requestedAt: string;
-  scheduledFor: string;
-  label: string;
-  status: 'pendiente' | 'atendida';
-}
-
-export function scheduleLaunch(scheduledFor: string, label: string) {
-  return api('/api/recognitions/launch', {
-    method: 'POST',
-    body: JSON.stringify({ scheduledFor, label }),
-  }) as Promise<{ request: LaunchRequest }>;
-}
-
-export function fetchLaunchRequest() {
-  return api('/api/recognitions/launch-request') as Promise<{ request: LaunchRequest | null }>;
-}
-
-export function dismissLaunchRequest() {
-  return api('/api/recognitions/launch/dismiss', { method: 'POST' });
 }
 
 export interface ApiTokenInfo {

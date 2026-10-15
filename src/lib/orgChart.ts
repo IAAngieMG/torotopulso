@@ -295,15 +295,3 @@ export function firstNameFor(email: string): string {
   if (!full) return '';
   return full.replace(/\(.*?\)/g, '').trim().split(/\s+/)[0];
 }
-
-/** Usado por Reconocimientos para sugerir el rol/equipo de la persona que la IA identificó. */
-export function guessNomineeRole(nomineeName: string): string {
-  if (!nomineeName) return '';
-  const target = nomineeName.trim().toLowerCase();
-  for (const team of ORG_TEAMS) {
-    if (team.leader.name.toLowerCase() === target) return `Líder, ${team.name}`;
-    const found = team.members.find(mem => mem.name.toLowerCase() === target);
-    if (found) return team.name;
-  }
-  return '';
-}
