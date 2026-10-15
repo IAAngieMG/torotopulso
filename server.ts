@@ -907,14 +907,37 @@ export async function createApp() {
     return { email: record.email };
   }
 
-  // Logging temporal para depurar el conector MCP de Claude.ai: solo método/ruta/estado, nunca el
-  // token. Quitar una vez confirmado que la conexión funciona de punta a punta.
-  app.use(['/mcp', '/.well-known'], (req, res, next) => {
-    const hasAuth = Boolean(req.headers.authorization);
-    res.on('finish', () => {
-      console.log(`[mcp-debug] ${req.method} ${req.originalUrl} auth=${hasAuth} -> ${res.statusCode}`);
+  // El SDK de MCP exige que el POST a `/mcp` traiga el header `Content-Type: application/json`
+  // exacto, y lo rechaza con 415 si no — incluido cuando un cliente (como la comprobación inicial
+  // de conectividad de Claude.ai al agregar el conector) manda otro Content-Type, o ninguno, en una
+  // petición de prueba. El transporte lee las cabeceras desde `req.rawHeaders` (vía
+  // `@hono/node-server`), no desde el objeto `req.headers` ya parseado de Express/Node — así que
+  // hay que corregir ahí. Como `/mcp` solo acepta JSON de todos modos, forzamos el header en ambos
+  // lugares y, si el parser global de arriba no alcanzó a leer el cuerpo (porque vio un Content-Type
+  // distinto), lo leemos aquí manualmente.
+  app.use('/mcp', (req, res, next) => {
+    req.headers['content-type'] = 'application/json';
+    const rawHeaders = req.rawHeaders;
+    for (let i = 0; i < rawHeaders.length; i += 2) {
+      if (rawHeaders[i].toLowerCase() === 'content-type') rawHeaders[i + 1] = 'application/json';
+    }
+    if (!rawHeaders.some(h => h.toLowerCase() === 'content-type')) rawHeaders.push('Content-Type', 'application/json');
+    if (req.method !== 'POST' || req.body !== undefined) return next();
+    let rawBody = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk: string) => {
+      rawBody += chunk;
     });
-    next();
+    req.on('end', () => {
+      if (rawBody) {
+        try {
+          req.body = JSON.parse(rawBody);
+        } catch {
+          // Deja el body vacío; el SDK de MCP reporta su propio error de parseo JSON-RPC.
+        }
+      }
+      next();
+    });
   });
 
   // El SDK de MCP exige que el POST a `/mcp` traiga el header `Content-Type: application/json`
