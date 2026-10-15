@@ -5,8 +5,8 @@ import { buildPulsoBrief } from './pulsoBrief.ts';
 import type { ResponseRecord } from './pulseData.ts';
 
 export interface PulsoMcpOptions {
-  /** Correo ya autenticado (dueño del token de API que llamó al conector) — nunca viene del cliente MCP. */
-  email: string;
+  /** Correo ya autenticado (dueño del token de API que llamó al conector) — nunca viene del cliente MCP. `null` si la petición no trajo un token válido: el handshake (`initialize`/`tools/list`) igual se completa, y la tool sola devuelve el error de auth al invocarse. */
+  email: string | null;
   loadRecords: () => Promise<ResponseRecord[]>;
 }
 
@@ -15,6 +15,10 @@ export interface PulsoMcpOptions {
  * encaja con el runtime sin estado de las funciones de Netlify. Expone una sola tool de solo
  * lectura, con el mismo alcance de permisos (`resolveOrgAccess`) que ya aplica el dashboard y la
  * API REST — un conector MCP personalizado nunca ve más de lo que esa cuenta ya puede ver.
+ *
+ * No se exige el token en `initialize`/`tools/list` (solo al invocar la tool): algunos clientes MCP
+ * hacen una conexión de prueba sin credenciales antes de aplicar el header configurado, y un 401 a
+ * nivel de transporte ahí se ve como "servidor inválido" en vez de un problema de auth.
  */
 export function createPulsoMcpServer({ email, loadRecords }: PulsoMcpOptions): McpServer {
   const server = new McpServer({ name: 'pulso-toroto', version: '1.0.0' });
@@ -30,6 +34,9 @@ export function createPulsoMcpServer({ email, loadRecords }: PulsoMcpOptions): M
       },
     },
     async ({ range }) => {
+      if (!email) {
+        return { content: [{ type: 'text' as const, text: 'Token de API inválido, revocado o no provisto.' }], isError: true };
+      }
       const access = resolveOrgAccess(email);
       if (!access.granted) {
         return { content: [{ type: 'text' as const, text: 'Esta cuenta no tiene acceso a Pulso Toroto.' }], isError: true };
