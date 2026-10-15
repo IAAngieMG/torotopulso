@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, ChevronRight, Palmtree } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronRight, Palmtree, Baby } from 'lucide-react';
 import { fetchRedFlags, type PersonRedFlags, type VacationStatus } from '../lib/apiClient.ts';
 
 /**
@@ -132,18 +132,18 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
         (() => {
           const onMaternity = vacations.filter(v => v.isMaternity);
           return (
-            <div className="rounded-xl border border-pink-300 bg-pink-50 overflow-hidden">
+            <div className="rounded-xl border border-sky-300 bg-sky-50 overflow-hidden">
               <button
                 onClick={() => setVacationsExpanded(v => !v)}
-                className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-pink-100/50 transition-colors"
+                className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-sky-100/50 transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <Palmtree size={16} className="text-pink-600" />
-                  <span className="font-display font-semibold text-sm text-pink-900">
+                  <Baby size={16} className="text-sky-600" />
+                  <span className="font-display font-semibold text-sm text-sky-900">
                     De maternidad · {onMaternity.length} persona{onMaternity.length === 1 ? '' : 's'}
                   </span>
                 </span>
-                {vacationsExpanded ? <ChevronUp size={16} className="text-pink-700" /> : <ChevronDown size={16} className="text-pink-700" />}
+                {vacationsExpanded ? <ChevronUp size={16} className="text-sky-700" /> : <ChevronDown size={16} className="text-sky-700" />}
               </button>
               {vacationsExpanded && (
                 <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
@@ -151,14 +151,14 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
                     <button
                       key={v.email}
                       onClick={() => onOpenPerson(v.email)}
-                      className="text-left rounded-lg border border-pink-300 p-3 bg-white hover:border-toroto-primary transition-colors"
+                      className="text-left rounded-lg border border-sky-300 p-3 bg-white hover:border-toroto-primary transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
                         <ChevronRight size={14} className="text-slate-400 shrink-0" />
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
-                      <p className="text-xs text-pink-700 mt-2">{v.message}</p>
+                      <p className="text-xs text-sky-700 mt-2">{v.message}</p>
                     </button>
                   ))}
                 </div>
