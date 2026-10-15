@@ -907,20 +907,6 @@ export async function createApp() {
     return { email: record.email };
   }
 
-  // Claude.ai valida y usa los conectores MCP personalizados desde el navegador del usuario (no
-  // solo desde su backend), así que sin cabeceras CORS el navegador bloquea la conexión antes de
-  // que llegue nuestro código — se ve como "Couldn't connect to the server" sin ningún log del lado
-  // del servidor. `/mcp` es de solo lectura y ya exige su propio token Bearer, así que un origen
-  // abierto no amplía lo que una cuenta puede ver.
-  app.use('/mcp', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, mcp-protocol-version, Accept');
-    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
-    if (req.method === 'OPTIONS') return res.status(204).end();
-    next();
-  });
-
   app.post('/mcp', async (req, res) => {
     const session = await mcpAuthenticate(req);
     if (!session) {
@@ -949,6 +935,24 @@ export async function createApp() {
   app.delete('/mcp', (_req, res) => {
     res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null });
   });
+
+  // Antes de conectar, un cliente MCP (Claude.ai incluido) sondea estas rutas de descubrimiento de
+  // OAuth (RFC 9728 / RFC 8414) para saber si el servidor requiere auth delegada. Sin una ruta
+  // explícita, caían en el catch-all de la SPA de abajo y devolvían 200 con el HTML del dashboard —
+  // el cliente intenta parsearlo como JSON, falla, y el conector se ve como "no se pudo conectar"
+  // aunque `/mcp` en sí responda bien. No usamos OAuth (solo el token Bearer de "Acceso API"), así
+  // que la respuesta correcta es un 404 JSON limpio, no el HTML del front.
+  app.get(
+    [
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-protected-resource/*splat',
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/oauth-authorization-server/*splat',
+    ],
+    (_req, res) => {
+      res.status(404).json({ error: 'not_found' });
+    },
+  );
 
   if (!process.env.NETLIFY && process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
