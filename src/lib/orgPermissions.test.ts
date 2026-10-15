@@ -74,29 +74,19 @@ test('un correo que no existe en el organigrama no tiene acceso', () => {
   assert.equal(access.fullName, '');
 });
 
-test('Luis lidera dos equipos (Gerencia de Restauración Territorial y _Alfredo) y su cascada une ambos, llegando hasta Helen', () => {
-  // "_Alfredo" quedó sin líder asignado y le pasó a Luis, así que ahora sí es alcanzable, y desde
-  // ahí la cascada sigue hasta "_Helen" (que Helen lidera, siendo miembro de "_Alfredo").
+test('Luis lidera Gerencia de Restauración Territorial y su cascada llega hasta Carbono_Xico vía Karen y Juan', () => {
   const access = resolveOrgAccess('luis@toroto.mx');
   assert.equal(access.granted, true);
   assert.equal(access.primaryTeam, 'Gerencia de Restauración Territorial');
   assert.deepEqual(
     new Set(access.secondaryTeams),
-    new Set([
-      'DTP de Restauración Territorial',
-      'OT_Juan',
-      'Coordinación Territorial de Carbono_Xico',
-      'Coordinación Territorial de Carbono_Alfredo',
-      'Coordinación Territorial de Carbono_Helen',
-    ]),
+    new Set(['DTP de Restauración Territorial', 'OT_Juan', 'Coordinación Territorial de Carbono_Xico']),
   );
 });
 
-test('Helen (miembro de _Alfredo, que ahora lidera Luis) sigue liderando su propio equipo con su propio alcance', () => {
+test('Helen ahora es miembro de OT_Juan (reporta a Juan) y no lidera ningún equipo propio', () => {
   const access = resolveOrgAccess('helen@toroto.mx');
-  assert.equal(access.granted, true);
-  assert.equal(access.primaryTeam, 'Coordinación Territorial de Carbono_Helen');
-  assert.deepEqual(access.dataScope, ['Coordinación Territorial de Carbono_Helen']);
+  assert.equal(access.granted, false);
 });
 
 test('Sofia llega hasta Eleazar: su cascada desde Dirección P3 incluye P3', () => {
