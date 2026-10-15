@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TreePalm, Sparkles, Lightbulb } from 'lucide-react';
+import { TreePalm, Sparkles, Lightbulb, Baby } from 'lucide-react';
 import type { AutoInsight, DailyPoint, EnergyDistribution, Kpis } from '../lib/apiClient.ts';
 
 /** Renders `**texto**` como negritas, sin traer una librería de markdown para esto. */
@@ -58,11 +58,12 @@ export function AiInsightCard({ insight, title = 'Pulso IA' }: { insight: AutoIn
 export function VacationBadge({ label }: { label: string }) {
   const isMaternity = label.startsWith('De maternidad');
   const classes = isMaternity
-    ? 'text-pink-700 bg-pink-50 border-pink-300'
+    ? 'text-sky-700 bg-sky-50 border-sky-300'
     : 'text-yellow-700 bg-yellow-50 border-yellow-300';
+  const Icon = isMaternity ? Baby : TreePalm;
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold border rounded-full px-1.5 py-0.5 ${classes}`}>
-      <TreePalm size={10} /> {label}
+      <Icon size={10} /> {label}
     </span>
   );
 }
