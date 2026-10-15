@@ -950,6 +950,24 @@ export async function createApp() {
     res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null });
   });
 
+  // Antes de conectar, un cliente MCP (Claude.ai incluido) sondea estas rutas de descubrimiento de
+  // OAuth (RFC 9728 / RFC 8414) para saber si el servidor requiere auth delegada. Sin una ruta
+  // explícita, caían en el catch-all de la SPA de abajo y devolvían 200 con el HTML del dashboard —
+  // el cliente intenta parsearlo como JSON, falla, y el conector se ve como "no se pudo conectar"
+  // aunque `/mcp` en sí responda bien. No usamos OAuth (solo el token Bearer de "Acceso API"), así
+  // que la respuesta correcta es un 404 JSON limpio, no el HTML del front.
+  app.get(
+    [
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-protected-resource/*splat',
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/oauth-authorization-server/*splat',
+    ],
+    (_req, res) => {
+      res.status(404).json({ error: 'not_found' });
+    },
+  );
+
   if (!process.env.NETLIFY && process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
