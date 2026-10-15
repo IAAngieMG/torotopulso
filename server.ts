@@ -957,12 +957,7 @@ export async function createApp() {
   // aunque `/mcp` en sí responda bien. No usamos OAuth (solo el token Bearer de "Acceso API"), así
   // que la respuesta correcta es un 404 JSON limpio, no el HTML del front.
   app.get(
-    [
-      '/.well-known/oauth-protected-resource',
-      '/.well-known/oauth-protected-resource/*splat',
-      '/.well-known/oauth-authorization-server',
-      '/.well-known/oauth-authorization-server/*splat',
-    ],
+    ['/.well-known', '/.well-known/*splat'],
     (_req, res) => {
       res.status(404).json({ error: 'not_found' });
     },
