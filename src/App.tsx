@@ -6,15 +6,12 @@ import Dashboard from './components/Dashboard.tsx';
 import TeamDetail from './components/TeamDetail.tsx';
 import PersonDetail from './components/PersonDetail.tsx';
 import FeedbackInbox from './components/FeedbackInbox.tsx';
-import RecognitionsAdmin from './components/RecognitionsAdmin.tsx';
-import RecognitionsGallery from './components/RecognitionsGallery.tsx';
 
 type View =
   | { name: 'overview' }
   | { name: 'team'; team: string }
   | { name: 'person'; email: string }
-  | { name: 'feedback' }
-  | { name: 'recognitions' };
+  | { name: 'feedback' };
 
 /**
  * La vista completa vive en `location.hash` (no solo en estado de React) para que el botón de
@@ -32,8 +29,6 @@ function viewToHash(view: View): string {
       return `#/person/${encodeURIComponent(view.email)}`;
     case 'feedback':
       return '#/feedback';
-    case 'recognitions':
-      return '#/recognitions';
   }
 }
 
@@ -42,7 +37,6 @@ function hashToView(hash: string): View {
   if (parts[0] === 'team' && parts[1]) return { name: 'team', team: decodeURIComponent(parts[1]) };
   if (parts[0] === 'person' && parts[1]) return { name: 'person', email: decodeURIComponent(parts[1]) };
   if (parts[0] === 'feedback') return { name: 'feedback' };
-  if (parts[0] === 'recognitions') return { name: 'recognitions' };
   return { name: 'overview' };
 }
 
@@ -107,7 +101,6 @@ export default function App() {
           onSetViewAs={setViewAs}
           onOpenTeam={team => navigate({ name: 'team', team })}
           onOpenPerson={email => navigate({ name: 'person', email })}
-          onOpenRecognitions={() => navigate({ name: 'recognitions' })}
         />
       )}
       {view.name === 'team' && (
@@ -123,13 +116,6 @@ export default function App() {
         <PersonDetail me={me} onSetViewAs={setViewAs} email={view.email} onBack={() => navigate({ name: 'overview' })} />
       )}
       {view.name === 'feedback' && me.canSeeFeedback && <FeedbackInbox me={me} />}
-      {view.name === 'recognitions' &&
-        me.canViewRecognitions &&
-        (me.canManageRecognitions ? (
-          <RecognitionsAdmin me={me} onSetViewAs={setViewAs} onBack={() => navigate({ name: 'overview' })} />
-        ) : (
-          <RecognitionsGallery me={me} onSetViewAs={setViewAs} onBack={() => navigate({ name: 'overview' })} />
-        ))}
     </Shell>
   );
 }

@@ -14,7 +14,6 @@
     "test": "node --experimental-strip-types --test src/lib/*.test.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@netlify/blobs": "^11.0.3",
     "@netlify/functions": "^6.0.0",

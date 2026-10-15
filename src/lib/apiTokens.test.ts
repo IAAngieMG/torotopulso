@@ -82,5 +82,5 @@ test('isReadOnlyPulseRoute bloquea escrituras y rutas fuera de Pulso', () => {
   assert.equal(isReadOnlyPulseRoute('POST', '/pulse/overview'), false);
   assert.equal(isReadOnlyPulseRoute('GET', '/tokens'), false);
   assert.equal(isReadOnlyPulseRoute('DELETE', '/feedback/1'), false);
-  assert.equal(isReadOnlyPulseRoute('GET', '/recognitions/pending'), false);
+  assert.equal(isReadOnlyPulseRoute('GET', '/other'), false);
 });
