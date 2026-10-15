@@ -15,6 +15,8 @@ import {
   isReadOnlyPulseRoute,
   type ApiTokenRecord,
 } from './src/lib/apiTokens.ts';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createPulsoMcpServer } from './src/lib/mcpServer.ts';
 import { fetchSheetRows } from './src/lib/sheets.ts';
 import { parseNominations, type Nomination } from './src/lib/recognitionData.ts';
 import {
@@ -886,6 +888,52 @@ export async function createApp() {
     const records = await loadRecognitionRecords();
     const diplomas = Object.values(records).filter(r => r.status === 'publicado' && r.month === month);
     res.json({ month, diplomas });
+  });
+
+  // Conector MCP remoto para Pulso: una cuenta externa (ej. el Claude de alguien, agregado como
+  // "conector personalizado") se autentica con su propio token de "Acceso API" y jala su brief en
+  // vivo — a diferencia de la skill basada en fetch directo, un conector MCP lo llama Claude desde
+  // sus propios servidores, no desde el sandbox del chat, así que no choca con listas de sitios
+  // permitidos del lado del cliente. Servidor MCP nuevo por request (modo stateless): encaja con
+  // el runtime sin estado de las funciones de Netlify, ver `createPulsoMcpServer`.
+  async function mcpAuthenticate(req: Request): Promise<{ email: string } | null> {
+    const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!t.startsWith(API_TOKEN_PREFIX)) return null;
+    const tokens = await loadApiTokens();
+    const record = findApiTokenByRaw(tokens, t);
+    if (!record) return null;
+    tokens[record.id] = { ...record, lastUsedAt: new Date().toISOString() };
+    saveApiTokens(tokens).catch(() => {});
+    return { email: record.email };
+  }
+
+  app.post('/mcp', async (req, res) => {
+    const session = await mcpAuthenticate(req);
+    if (!session) {
+      return res.status(401).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token de API inválido, revocado o no provisto.' }, id: null });
+    }
+    try {
+      const server = createPulsoMcpServer({ email: session.email, loadRecords: async () => (await loadPulseData()).responses });
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      res.on('close', () => {
+        transport.close();
+        server.close();
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error: any) {
+      if (!res.headersSent) {
+        res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: error.message || 'Error interno del servidor MCP.' }, id: null });
+      }
+    }
+  });
+
+  app.get('/mcp', (_req, res) => {
+    res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null });
+  });
+
+  app.delete('/mcp', (_req, res) => {
+    res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null });
   });
 
   if (!process.env.NETLIFY && process.env.NODE_ENV !== 'production') {
