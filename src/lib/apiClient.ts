@@ -79,6 +79,7 @@ export interface VacationStatus {
   fullName: string;
   team: string;
   message: string;
+  isMaternity: boolean;
 }
 
 export interface Kpis {
