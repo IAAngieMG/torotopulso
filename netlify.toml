@@ -20,6 +20,12 @@
   force = true
 
 [[redirects]]
+  from = "/.well-known/*"
+  to = "/.netlify/functions/api/.well-known/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
