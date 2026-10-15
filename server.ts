@@ -907,27 +907,15 @@ export async function createApp() {
     return { email: record.email };
   }
 
-  // Claude.ai valida y usa los conectores MCP personalizados desde el navegador del usuario (no
-  // solo desde su backend), así que sin cabeceras CORS el navegador bloquea la conexión antes de
-  // que llegue nuestro código — se ve como "Couldn't connect to the server" sin ningún log del lado
-  // del servidor. `/mcp` es de solo lectura y ya exige su propio token Bearer, así que un origen
-  // abierto no amplía lo que una cuenta puede ver.
-  app.use('/mcp', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, mcp-protocol-version, Accept');
-    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
-    if (req.method === 'OPTIONS') return res.status(204).end();
-    next();
-  });
-
   app.post('/mcp', async (req, res) => {
+    // No se rechaza aquí con 401 por falta/token inválido: algunos clientes MCP hacen una conexión
+    // de prueba sin credenciales antes de aplicar el header configurado, y un 401 a nivel de
+    // transporte en el handshake se ve como "servidor inválido" en vez de un problema de auth. El
+    // control de acceso real pasa dentro de la tool (`createPulsoMcpServer`), que nunca entrega
+    // datos sin un token válido.
     const session = await mcpAuthenticate(req);
-    if (!session) {
-      return res.status(401).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Token de API inválido, revocado o no provisto.' }, id: null });
-    }
     try {
-      const server = createPulsoMcpServer({ email: session.email, loadRecords: async () => (await loadPulseData()).responses });
+      const server = createPulsoMcpServer({ email: session?.email ?? null, loadRecords: async () => (await loadPulseData()).responses });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on('close', () => {
         transport.close();
