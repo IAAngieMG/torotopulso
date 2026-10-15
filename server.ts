@@ -907,16 +907,6 @@ export async function createApp() {
     return { email: record.email };
   }
 
-  // Logging temporal para depurar el conector MCP de Claude.ai: solo método/ruta/estado, nunca el
-  // token. Quitar una vez confirmado que la conexión funciona de punta a punta.
-  app.use(['/mcp', '/.well-known'], (req, res, next) => {
-    const hasAuth = Boolean(req.headers.authorization);
-    res.on('finish', () => {
-      console.log(`[mcp-debug] ${req.method} ${req.originalUrl} auth=${hasAuth} -> ${res.statusCode}`);
-    });
-    next();
-  });
-
   // El SDK de MCP exige que el POST a `/mcp` traiga el header `Content-Type: application/json`
   // exacto, y lo rechaza con 415 si no — incluido cuando un cliente (como la comprobación inicial
   // de conectividad de Claude.ai al agregar el conector) manda otro Content-Type, o ninguno, en una
