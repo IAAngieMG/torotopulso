@@ -315,13 +315,16 @@ export interface VacationStatus {
   fullName: string;
   team: string;
   message: string;
+  /** True si el motivo de la ausencia es maternidad, para distinguirla visualmente de vacaciones normales. */
+  isMaternity: boolean;
 }
 
 /**
  * Quién del roster estuvo de vacaciones (alcance "all") algún día hábil de la semana pasada —
  * nunca es una red flag, así que vive aparte de `computeRedFlagsForRoster`: se muestra como una
  * flag amarilla informativa en su propia sección, nunca mezclada ni contada junto a las red
- * flags reales.
+ * flags reales. Una ausencia por maternidad usa el mismo cálculo pero se marca con `isMaternity`
+ * para que la UI la muestre en rosa en vez de amarillo.
  */
 export function computeVacationStatusForRoster(roster: RosterPerson[], now = new Date()): VacationStatus[] {
   const { start, end } = rangeWindow('lastWeek', now);
@@ -331,11 +334,13 @@ export function computeVacationStatusForRoster(roster: RosterPerson[], now = new
   for (const person of roster) {
     const vacationDays = weekdays.filter(k => activeVacation(person.email, new Date(`${k}T12:00:00`))?.scope === 'all');
     if (vacationDays.length === 0) continue;
+    const reason = activeVacation(person.email, new Date(`${vacationDays[0]}T12:00:00`))?.reason ?? 'De vacaciones';
     result.push({
       email: person.email,
       fullName: person.fullName,
       team: person.team,
-      message: `De vacaciones ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+      message: `${reason} ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
+      isMaternity: reason === 'De maternidad',
     });
   }
   return result;

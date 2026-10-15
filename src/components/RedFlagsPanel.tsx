@@ -38,18 +38,18 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
   return (
     <div className="space-y-3">
       {people && people.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+        <div className="rounded-xl border border-red-300 bg-red-50 overflow-hidden">
           <button
             onClick={() => setExpanded(v => !v)}
-            className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-amber-100/50 transition-colors"
+            className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-red-100/50 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-600" />
-              <span className="font-display font-semibold text-sm text-amber-900">
+              <AlertTriangle size={16} className="text-red-600" />
+              <span className="font-display font-semibold text-sm text-red-900">
                 Red flags detectadas · {people.length} persona{people.length === 1 ? '' : 's'}
               </span>
             </span>
-            {expanded ? <ChevronUp size={16} className="text-amber-700" /> : <ChevronDown size={16} className="text-amber-700" />}
+            {expanded ? <ChevronUp size={16} className="text-red-700" /> : <ChevronDown size={16} className="text-red-700" />}
           </button>
           {expanded && (
             <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
@@ -60,7 +60,7 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
                     key={p.email}
                     onClick={() => onOpenPerson(p.email)}
                     className={`text-left rounded-lg border p-3 bg-white hover:border-toroto-primary transition-colors ${
-                      hasAlta ? 'border-red-200' : 'border-amber-200'
+                      hasAlta ? 'border-red-300' : 'border-amber-200'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -89,40 +89,83 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
         </div>
       )}
 
-      {vacations.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-          <button
-            onClick={() => setVacationsExpanded(v => !v)}
-            className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-amber-100/50 transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <Palmtree size={16} className="text-amber-600" />
-              <span className="font-display font-semibold text-sm text-amber-900">
-                De vacaciones · {vacations.length} persona{vacations.length === 1 ? '' : 's'}
-              </span>
-            </span>
-            {vacationsExpanded ? <ChevronUp size={16} className="text-amber-700" /> : <ChevronDown size={16} className="text-amber-700" />}
-          </button>
-          {vacationsExpanded && (
-            <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
-              {vacations.map(v => (
-                <button
-                  key={v.email}
-                  onClick={() => onOpenPerson(v.email)}
-                  className="text-left rounded-lg border border-amber-200 p-3 bg-white hover:border-toroto-primary transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
-                    <ChevronRight size={14} className="text-slate-400 shrink-0" />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
-                  <p className="text-xs text-amber-700 mt-2">{v.message}</p>
-                </button>
-              ))}
+      {vacations.filter(v => !v.isMaternity).length > 0 &&
+        (() => {
+          const onVacation = vacations.filter(v => !v.isMaternity);
+          return (
+            <div className="rounded-xl border border-yellow-300 bg-yellow-50 overflow-hidden">
+              <button
+                onClick={() => setVacationsExpanded(v => !v)}
+                className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-yellow-100/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Palmtree size={16} className="text-yellow-600" />
+                  <span className="font-display font-semibold text-sm text-yellow-900">
+                    De vacaciones · {onVacation.length} persona{onVacation.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                {vacationsExpanded ? <ChevronUp size={16} className="text-yellow-700" /> : <ChevronDown size={16} className="text-yellow-700" />}
+              </button>
+              {vacationsExpanded && (
+                <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
+                  {onVacation.map(v => (
+                    <button
+                      key={v.email}
+                      onClick={() => onOpenPerson(v.email)}
+                      className="text-left rounded-lg border border-yellow-300 p-3 bg-white hover:border-toroto-primary transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
+                        <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
+                      <p className="text-xs text-yellow-700 mt-2">{v.message}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          );
+        })()}
+
+      {vacations.filter(v => v.isMaternity).length > 0 &&
+        (() => {
+          const onMaternity = vacations.filter(v => v.isMaternity);
+          return (
+            <div className="rounded-xl border border-pink-300 bg-pink-50 overflow-hidden">
+              <button
+                onClick={() => setVacationsExpanded(v => !v)}
+                className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-pink-100/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Palmtree size={16} className="text-pink-600" />
+                  <span className="font-display font-semibold text-sm text-pink-900">
+                    De maternidad · {onMaternity.length} persona{onMaternity.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                {vacationsExpanded ? <ChevronUp size={16} className="text-pink-700" /> : <ChevronDown size={16} className="text-pink-700" />}
+              </button>
+              {vacationsExpanded && (
+                <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
+                  {onMaternity.map(v => (
+                    <button
+                      key={v.email}
+                      onClick={() => onOpenPerson(v.email)}
+                      className="text-left rounded-lg border border-pink-300 p-3 bg-white hover:border-toroto-primary transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
+                        <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
+                      <p className="text-xs text-pink-700 mt-2">{v.message}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
     </div>
   );
 }

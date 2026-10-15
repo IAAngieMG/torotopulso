@@ -59,10 +59,10 @@ export default function PersonDetail({
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}
 
         {data && data.redFlags.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <div className="rounded-xl border border-red-300 bg-red-50 p-4 space-y-2">
             <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-600" />
-              <p className="font-display font-semibold text-sm text-amber-900">Red flags detectadas</p>
+              <AlertTriangle size={16} className="text-red-600" />
+              <p className="font-display font-semibold text-sm text-red-900">Red flags detectadas</p>
             </div>
             <ul className="space-y-1">
               {data.redFlags.map((f, i) => (

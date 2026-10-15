@@ -18,8 +18,6 @@ test('rosterForTeams: nadie se repite en un alcance con varios niveles de cascad
     'DTP de Restauración Territorial',
     'OT_Juan',
     'Coordinación Territorial de Carbono_Xico',
-    'Coordinación Territorial de Carbono_Alfredo',
-    'Coordinación Territorial de Carbono_Helen',
   ];
   const roster = rosterForTeams(teams);
   const emails = roster.map(p => p.email);

@@ -186,28 +186,13 @@ export const ORG_TEAMS: OrgTeam[] = [
       m('Xicotencatl Camacho Coronel', 'xicotencatl@toroto.mx'),
       m('Gilberto Gonzalez Barrios', 'gilberto@toroto.mx'),
       m('Gustavo Nicolas Gómez Pinacho', null),
+      m('Helen Jacquelinne Hernández Roblero', 'helen@toroto.mx'),
     ],
   },
   {
     name: 'Coordinación Territorial de Carbono_Xico',
     leader: m('Xicotencatl Camacho Coronel', 'xicotencatl@toroto.mx'),
     members: [m('Juan Manuel Cortes Rivas', 'juanmanuel@toroto.mx'), m('Vanesa Hernández González', 'vanesa@toroto.mx')],
-  },
-  {
-    name: 'Coordinación Territorial de Carbono_Alfredo',
-    leader: m('Luis Ortega Arguelles', 'luis@toroto.mx'),
-    members: [m('Helen Jacquelinne Hernández Roblero', 'helen@toroto.mx')],
-  },
-  {
-    name: 'Coordinación Territorial de Carbono_Helen',
-    leader: m('Helen Jacquelinne Hernández Roblero', 'helen@toroto.mx'),
-    members: [
-      m('Javier Ramirez Madero', null),
-      m('Benito Ramirez Pasten', null),
-      m('Marco Antonio Davila Torres', null),
-      m('Jose Israel García Hernandez', null),
-      m('Jorge Meneses Pérez', null),
-    ],
   },
 ];
 
@@ -269,9 +254,8 @@ export function rosterForTeams(teamNames: string[], opts: { onlyLeaders?: boolea
 }
 
 /**
- * Todos los equipos que esa persona lidera. Casi siempre uno solo, pero algunas personas
- * (ej. Luis, que además de "Gerencia de Restauración Territorial" quedó a cargo del equipo
- * huérfano "_Alfredo") lideran más de uno — la cascada de permisos debe arrancar desde todos.
+ * Todos los equipos que esa persona lidera. Casi siempre uno solo, pero si alguna vez alguien
+ * queda a cargo de más de uno, la cascada de permisos debe arrancar desde todos.
  */
 export function teamsLedBy(email: string): OrgTeam[] {
   const target = norm(email);
