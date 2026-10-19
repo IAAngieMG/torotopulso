@@ -12,18 +12,17 @@ import { activeVacation } from './vacations.ts';
  * más de `PATTERN_DAYS_THRESHOLD` (3) días hábiles de la semana pasada, no menos:
  *  - Silencio: no respondió ninguna encuesta.
  *  - Inicio del día (BD): mide únicamente si el check-in se hizo a tiempo, máximo 9:30 am hora
- *    CDMX — basado en el check-in viejo por botones. Desde oct 2026 la pregunta de Inicio del
- *    día pasó a una escala 1-5 igual que Cierre del día (ver scoring.ts `moodAverage`), pero esta
- *    red flag de puntualidad no se ha extendido a esa calificación: solo "Cierre del día" genera
- *    la flag de "Calificación baja" de abajo.
+ *    CDMX — basado en el check-in viejo por botones (sin `rawScore`). Esta flag de puntualidad
+ *    sigue existiendo aparte de la calificación 1-5 que BD trae desde oct 2026 (ver abajo).
  *  - Alimentos (AL): mide únicamente participación (si contestó o no ese slot); el contenido de
  *    la respuesta siempre es positivo (son emojis, no una calificación de calidad), así que
  *    nunca baja el ánimo — no participar es una flag informativa, no una caída de ánimo.
  *  - Cierre del día (BT) sin contestar: días en los que sí participó (respondió algo) pero se
  *    saltó ese slot puntual.
- *  - Calificación baja: el único dato que puede reflejar una baja de ánimo es la calificación de
- *    "Cierre del día" (BT) por debajo de 3/5 — ninguna otra encuesta genera esta flag, y una
- *    calificación de 3/5 o más en Cierre del día nunca cuenta como baja.
+ *  - Calificación baja: "Cierre del día" (BT) por debajo de 3/5, y desde oct 2026 también
+ *    "Inicio del día" (BD) cuando trae una calificación real 1-5 (no el check-in viejo por
+ *    botones, que no tiene `rawScore` y nunca cuenta aquí) — "Alimentos" nunca genera esta flag,
+ *    sin importar su calificación.
  *
  * Los días hábiles en los que la persona estaba de vacaciones (src/lib/vacations.ts, alcance
  * "all") no cuentan para ningún patrón (ni como silencio ni como parte del denominador) — las
@@ -177,19 +176,21 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     });
   }
 
-  // Única calificación que puede marcar baja de ánimo: "Cierre del día" (BT). "Inicio del día"
-  // solo mide puntualidad (arriba) y "Alimentos" solo participación (ya cubierto por
-  // "missing_response") — ninguna de las dos genera esta flag, sin importar su calificación.
+  // Calificaciones que pueden marcar baja de ánimo: "Cierre del día" (BT) y, desde oct 2026 que
+  // "Inicio del día" (BD) pasó a la misma escala 1-5 (ver scoring.ts `moodAverage`), también BD
+  // cuando trae `rawScore` real (el check-in viejo por botones, sin `rawScore`, nunca cuenta
+  // aquí). "Alimentos" solo mide participación (ya cubierto por "missing_response") y nunca entra.
   const lowScoreRecords = [...recent]
-    .filter(r => r.qCode === 'BT' && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
+    .filter(r => (r.qCode === 'BT' || r.qCode === 'BD') && r.rawScore !== null && (r.rawScore as number) < LOW_SCORE_THRESHOLD)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const lowScoreDays = new Set(lowScoreRecords.map(r => localDateKey(r.timestamp)));
   if (lowScoreDays.size > PATTERN_DAYS_THRESHOLD) {
     const latest = lowScoreRecords[0];
+    const latestLabel = latest.qCode === 'BT' ? 'Cierre del día' : 'Inicio del día';
     flags.push({
       type: 'low_score',
       severity: 'alta',
-      message: `Calificación baja en "Cierre del día" (menor a 3/5) en ${lowScoreDays.size} días de la semana pasada — la más reciente, ${latest.rawScore}/5 el ${dateLabel(localDateKey(latest.timestamp))}.`,
+      message: `Calificación baja (menor a 3/5) en "Cierre del día" y/o "Inicio del día" en ${lowScoreDays.size} días de la semana pasada — la más reciente, ${latest.rawScore}/5 en "${latestLabel}" el ${dateLabel(localDateKey(latest.timestamp))}.`,
     });
   }
 
@@ -229,7 +230,11 @@ export function buildFlagContext(records: ResponseRecord[], now = new Date()): R
   const priorSilentDays = priorWeekdays.filter(k => !priorDatesWithResponse.has(k)).length;
   const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;
 
-  const priorAvgScore = average(prior.filter(r => r.qCode === 'BT' && r.rawScore !== null).map(r => r.rawScore as number));
+  // Mismo criterio que la flag de "Calificación baja": BT siempre, BD solo cuando trae
+  // calificación real 1-5 (el check-in viejo por botones no tiene `rawScore`).
+  const priorAvgScore = average(
+    prior.filter(r => (r.qCode === 'BT' || r.qCode === 'BD') && r.rawScore !== null).map(r => r.rawScore as number),
+  );
 
   const priorBD = prior.filter(r => r.qCode === 'BD');
   const recurringLateMorning = priorBD.length > 0 ? priorBD.filter(r => localMinuteOfDay(r.timestamp) > LATE_CHECKIN_MINUTE_OF_DAY).length / priorBD.length >= 0.5 : null;
