@@ -76,10 +76,10 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
                       Pulso del periodo:{' '}
-                      {/* Solo "Cierre del día" refleja ánimo — "Inicio del día" es puntualidad, no
-                          calificación, así que nunca debe mover este número. */}
-                      {member.kpis.btAverage != null
-                        ? `${member.kpis.btAverage.toFixed(1)} / 5`
+                      {/* moodAverage combina Cierre del día con Inicio del día (misma escala 1-5
+                          desde oct 2026) — el check-in viejo de botones nunca mueve este número. */}
+                      {member.kpis.moodAverage != null
+                        ? `${member.kpis.moodAverage.toFixed(1)} / 5`
                         : member.kpis.overallAverage != null
                           ? `${member.kpis.overallAverage.toFixed(1)} / 5`
                           : 'sin datos'}

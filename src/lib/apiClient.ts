@@ -82,6 +82,7 @@ export interface VacationStatus {
 export interface Kpis {
   bdAverage: number | null;
   btAverage: number | null;
+  moodAverage: number | null;
   overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;

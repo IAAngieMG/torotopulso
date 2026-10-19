@@ -96,23 +96,31 @@ function onTimeRate(records: ResponseRecord[]): number | null {
 }
 
 export interface OverviewKpis {
+  /** Promedio 1-5 de "Inicio del día" — `null` si en el rango solo hay respuestas del check-in
+   * viejo por botones (ver `bdOnTimePct`) o no hubo respuestas. Desde que la pregunta de Inicio
+   * del día pasó a la misma escala 1-5 que Cierre del día (oct 2026), sí es una calificación real
+   * de ánimo, no solo puntualidad — ver `moodAverage`. */
   bdAverage: number | null;
   btAverage: number | null;
-  /** Promedio de respuestas con calificación en el rango, EXCLUYENDO "Inicio del día" (su
-   * `rawScore` es el botón elegido, no una calificación de ánimo) — para no mostrar "sin datos"
-   * cuando alguien solo contestó encuestas fuera de BT (ver uso en la tarjeta individual de
-   * TeamDetail), sin dejar que la puntualidad de BD mueva ese promedio. */
+  /** Promedio combinado de las dos preguntas que miden ánimo con escala 1-5 (Inicio y Cierre del
+   * día) — las dos "la misma medida", por eso se promedian juntas en vez de preferir una sola.
+   * El check-in viejo por botones de Inicio del día (sin `rawScore`) nunca entra aquí. `null` si
+   * ninguna de las dos tiene respuestas calificadas en el rango. */
+  moodAverage: number | null;
+  /** Promedio de respuestas con calificación en el rango (incluye Inicio del día ya que ahora es
+   * una calificación real, no solo cuando viene por el check-in viejo de botones, que no trae
+   * `rawScore` y por lo tanto queda fuera solo). */
   overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;
-  /** % de respuestas de "Inicio del día" (check-in por botones) que llegaron a tiempo (9:00-9:30 am
-   * CDMX) — `null` si no hubo respuestas BD de este formato en el rango. Reemplaza a `bdAverage`
-   * como el dato relevante para ese slot, que ya no trae calificación 1-5. */
+  /** % de respuestas de "Inicio del día" POR EL CHECK-IN VIEJO de botones que llegaron a tiempo
+   * (9:00-9:30 am CDMX) — `null` si no hubo respuestas BD de ese formato viejo en el rango. Solo
+   * aplica a datos históricos anteriores al cambio a escala 1-5 (ver `bdAverage`). */
   bdOnTimePct: number | null;
-  /** Reparto de los dos botones del check-in ("Ya registré mi entrada" / "La registro ahora, por la
-   * tarde"), ej. "3 registraron su entrada · 1 avisó que la registraría después" — `null` junto con
-   * `bdOnTimePct`. Siempre en pasado (es el resultado ya dado, no necesariamente "ahora"). */
+  /** Reparto de los dos botones del check-in viejo ("Ya registré mi entrada" / "La registro ahora,
+   * por la tarde"), ej. "3 registraron su entrada · 1 avisó que la registraría después" — `null`
+   * junto con `bdOnTimePct`. Siempre en pasado (es el resultado ya dado, no necesariamente "ahora"). */
   bdOnTimeDetail: string | null;
 }
 
@@ -148,7 +156,8 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
   return {
     bdAverage: average(scores(records, 'BD')),
     btAverage: average(scores(records, 'BT')),
-    overallAverage: average(records.filter(r => r.qCode !== 'BD' && r.rawScore !== null).map(r => r.rawScore as number)),
+    moodAverage: average([...scores(records, 'BD'), ...scores(records, 'BT')]),
+    overallAverage: average(records.filter(r => r.rawScore !== null).map(r => r.rawScore as number)),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
     onTimePct: onTimeRate(records),
@@ -161,11 +170,12 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
 
 export interface DailyPoint {
   day: string;
+  /** Promedio 1-5 de "Inicio del día" ese día/semana — `null` si solo hubo respuestas del check-in
+   * viejo por botones (ver `bdOnTimePct`) o no hubo respuestas. */
   bd: number | null;
   bt: number | null;
-  /** % de respuestas de "Inicio del día" (check-in por botones) que llegaron a tiempo (9:00-9:30 am
-   * CDMX) — `null` si ese día/semana no hubo respuestas BD de este formato. Es el dato que sí aplica
-   * a "Inicio del día" ahora que ese slot es de botones (sin calificación 1-5, ver `bd` arriba). */
+  /** % de respuestas de "Inicio del día" POR EL CHECK-IN VIEJO de botones que llegaron a tiempo
+   * (9:00-9:30 am CDMX) — `null` si ese día/semana no hubo respuestas BD de ese formato viejo. */
   bdOnTimePct: number | null;
 }
 
@@ -308,21 +318,24 @@ export function buildAutoInsight(
   const entrada = computeEntradaInsight(records);
   const lunch = computeChoiceBreakdown(records, 'AL');
 
-  if (kpis.btAverage === null && entrada === null && lunch.length === 0) {
+  if (kpis.moodAverage === null && entrada === null && lunch.length === 0) {
     return { headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`, bullets: [], recommendation: null };
   }
 
-  const withBt = weeklySeries.filter(p => p.bt !== null);
-  const worstBt = withBt.length ? withBt.reduce((a, b) => ((b.bt ?? 5) < (a.bt ?? 5) ? b : a)) : null;
+  const withMood = weeklySeries.filter(p => p.bt !== null || p.bd !== null);
+  const dayMood = (p: DailyPoint) => (p.bt !== null && p.bd !== null ? (p.bt + p.bd) / 2 : (p.bt ?? p.bd ?? 5));
+  const worstMoodDay = withMood.length ? withMood.reduce((a, b) => (dayMood(b) < dayMood(a) ? b : a)) : null;
 
-  // El único dato que refleja cómo se sintió la persona/equipo es "Cierre del día" (BT): "Inicio
-  // del día" (puntualidad) y "Alimentos" (participación) son indicadores aparte, nunca deben
-  // mover la calificación general — si no hay BT en el rango, no hay base para opinar del ánimo.
-  const climate = kpis.btAverage == null ? null : kpis.btAverage >= 4 ? 'estable y positivo' : kpis.btAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
+  // Lo único que refleja cómo se sintió la persona/equipo es una calificación 1-5: "Cierre del
+  // día" (BT) y, desde que pasó a la misma escala (oct 2026), "Inicio del día" (BD) también —
+  // "Alimentos" (participación) sigue siendo un indicador aparte que nunca mueve la calificación
+  // general. El check-in viejo de botones (sin `rawScore`) no cuenta aquí (ver `bdOnTimePct`).
+  const climate =
+    kpis.moodAverage == null ? null : kpis.moodAverage >= 4 ? 'estable y positivo' : kpis.moodAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
   const capitalizedScope = scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1);
   const headline = climate
     ? `${capitalizedScope} se mantiene ${climate} en este rango.`
-    : `${capitalizedScope} no tiene respuestas de "Cierre del día" en este rango para evaluar el ánimo.`;
+    : `${capitalizedScope} no tiene calificación de ánimo registrada en este rango.`;
 
   const bullets: string[] = [];
   if (entrada) {
@@ -336,6 +349,7 @@ export function buildAutoInsight(
     const top = lunch[0];
     bullets.push(`La opción de comida más elegida fue la opción **#${top.choice}** (${top.pct}% de las respuestas).`);
   }
+  if (kpis.bdAverage !== null) bullets.push(`El inicio del día promedió **${kpis.bdAverage.toFixed(1)}/5**.`);
   if (kpis.btAverage !== null) bullets.push(`El cierre del día promedió **${kpis.btAverage.toFixed(1)}/5**.`);
   // La participación (cuántos de cuántos respondieron) solo aporta en equipo/general — en el
   // resumen de una sola persona es obvio (siempre "1 de 1") y no debe salir.
@@ -348,8 +362,8 @@ export function buildAutoInsight(
   }
 
   let recommendation: string | null = null;
-  if (worstBt && (worstBt.bt ?? 5) < 3.5) {
-    recommendation = `Revisar qué ocurrió el ${worstBt.day.toLowerCase()}, cuando el cierre bajó a ${worstBt.bt?.toFixed(1)}/5.`;
+  if (worstMoodDay && dayMood(worstMoodDay) < 3.5) {
+    recommendation = `Revisar qué ocurrió el ${worstMoodDay.day.toLowerCase()}, cuando el ánimo bajó a ${dayMood(worstMoodDay).toFixed(1)}/5.`;
   } else if (entrada && entrada.onTimePct < 70) {
     recommendation = `Solo ${entrada.onTimePct}% registró su entrada entre 9:00 y 9:30 am — vale la pena recordar el horario.`;
   } else if (kpis.onTimePct !== null && kpis.onTimePct < 70) {

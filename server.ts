@@ -440,13 +440,14 @@ export async function createApp() {
       );
       const kpis = computeKpis(records, rosterEmails.size);
       const previousKpis = range === 'week' ? computeKpis(previous, rosterEmails.size) : null;
-      // La tendencia refleja ánimo, así que se basa solo en "Cierre del día" (BT) — "Inicio del
-      // día" es puntualidad, no calificación, y nunca debe mover este indicador.
+      // La tendencia refleja ánimo, así que se basa en moodAverage (Cierre del día y, desde que
+      // pasó a la misma escala 1-5, Inicio del día) — el check-in viejo de botones nunca mueve
+      // este indicador, porque no aporta a moodAverage (ver scoring.ts).
       const trend =
-        previousKpis?.btAverage != null && kpis.btAverage != null
-          ? kpis.btAverage > previousKpis.btAverage
+        previousKpis?.moodAverage != null && kpis.moodAverage != null
+          ? kpis.moodAverage > previousKpis.moodAverage
             ? 'up'
-            : kpis.btAverage < previousKpis.btAverage
+            : kpis.moodAverage < previousKpis.moodAverage
               ? 'down'
               : 'flat'
           : 'flat';
