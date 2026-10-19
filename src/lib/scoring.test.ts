@@ -95,6 +95,24 @@ test('overallAverage ignora respuestas sin calificación (rawScore null, como un
   assert.equal(kpis.overallAverage, null);
 });
 
+test('bdAverage/moodAverage/overallAverage ignoran el check-in viejo de BD aunque el Sheet real también traiga rawScore poblado ahí (bug 2026-10-19)', () => {
+  // En producción el check-in viejo de botones de "Inicio del día" también puebla `rawScore`
+  // (reflejando el índice del botón, 1 o 2) y no solo `null` como se asumía — por eso la señal
+  // confiable de "formato viejo" es `choice` poblado, nunca `rawScore`. Sin este filtro, una
+  // semana enteramente de check-in viejo (mayormente botón "Ya registré mi entrada", rawScore 1)
+  // promediaba como una calificación baja falsa de ~1/5 en vez de no contar en absoluto.
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'b@toroto.mx' }),
+    rec({ qCode: 'BD', choice: 2, rawScore: 2, email: 'c@toroto.mx' }),
+    rec({ qCode: 'BT', rawScore: 4, email: 'a@toroto.mx' }),
+  ];
+  const kpis = computeKpis(records, 3);
+  assert.equal(kpis.bdAverage, null);
+  assert.equal(kpis.moodAverage, 4);
+  assert.equal(kpis.overallAverage, 4);
+});
+
 test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
   const points = computeWeeklySeries([], new Date('2026-09-03'));
   assert.equal(points.length, 5);
