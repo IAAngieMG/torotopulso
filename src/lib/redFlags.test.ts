@@ -145,10 +145,18 @@ test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('"Inicio del día" (BD) solo mide puntualidad: ninguna calificación baja ahí genera red flag de calificación baja', () => {
-  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1 }));
+test('"Inicio del día" (BD) del check-in viejo por botones (sin rawScore) nunca genera red flag de calificación baja', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: null, choice: 1 }));
   const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
+});
+
+test('"Inicio del día" (BD) en la escala 1-5 (desde oct 2026) sí genera red flag de calificación baja, igual que Cierre del día', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1 }));
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  const flag = flags.find(f => f.type === 'low_score');
+  assert.ok(flag, JSON.stringify(flags));
+  assert.match(flag!.message, /Inicio del día/);
 });
 
 test('una calificación de 4 o más en Cierre del día no genera red flag', () => {
@@ -237,6 +245,15 @@ test('buildFlagContext detecta que la persona sí era activa antes de la semana 
   const context = buildFlagContext(priorRecords, NOW);
   assert.equal(context.wasActiveBeforeSilence, true);
   assert.equal(context.priorAvgScore, 5);
+});
+
+test('buildFlagContext combina BD (escala 1-5) con BT en priorAvgScore, igual que moodAverage', () => {
+  const priorRecords = [
+    record({ timestamp: '2026-09-15T14:00:00.000Z', qCode: 'BD', rawScore: 3 }),
+    record({ timestamp: '2026-09-15T23:00:00.000Z', qCode: 'BT', rawScore: 5 }),
+  ];
+  const context = buildFlagContext(priorRecords, NOW);
+  assert.equal(context.priorAvgScore, 4);
 });
 
 test('computeRedFlagsForRoster solo regresa a quienes tienen al menos una red flag real; las vacaciones nunca cuentan como una', () => {
