@@ -44,7 +44,7 @@ export default function TeamsTable({
             <thead>
               <tr className="text-left text-xs text-slate-500 border-b border-toroto-border">
                 <th className="px-4 py-3 font-medium">Equipo</th>
-                <th className="px-4 py-3 font-medium">Inicio · % a tiempo</th>
+                <th className="px-4 py-3 font-medium">Inicio</th>
                 <th className="px-4 py-3 font-medium">Cierre BT</th>
                 <th className="px-4 py-3 font-medium">Participación</th>
                 <th className="px-4 py-3 font-medium">A tiempo</th>
@@ -74,7 +74,9 @@ export default function TeamsTable({
                       </div>
                       <p className="text-xs text-slate-400">{t.leader}</p>
                     </td>
-                    <td className="px-4 py-3">{t.kpis.bdOnTimePct != null ? `${t.kpis.bdOnTimePct}%` : '—'}</td>
+                    <td className="px-4 py-3">
+                      {t.kpis.bdAverage != null ? `${t.kpis.bdAverage.toFixed(1)}/5` : t.kpis.bdOnTimePct != null ? `${t.kpis.bdOnTimePct}%` : '—'}
+                    </td>
                     <td className="px-4 py-3">{t.kpis.btAverage != null ? `${t.kpis.btAverage.toFixed(1)}/5` : '—'}</td>
                     <td className="px-4 py-3">{t.kpis.participationPct != null ? `${t.kpis.participationPct}%` : '—'}</td>
                     <td className="px-4 py-3">{t.kpis.onTimePct != null ? `${t.kpis.onTimePct}%` : '—'}</td>

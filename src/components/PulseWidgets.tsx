@@ -85,10 +85,10 @@ export function KpiGrid({ kpis }: { kpis: Kpis }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <KpiCard
-        label={kpis.bdOnTimePct != null ? 'Inicio del día · % a tiempo' : 'Inicio del día (BD)'}
-        value={kpis.bdOnTimePct != null ? `${kpis.bdOnTimePct}%` : kpis.bdAverage != null ? kpis.bdAverage.toFixed(1) : '—'}
-        suffix={kpis.bdOnTimePct == null && kpis.bdAverage != null ? '/ 5' : undefined}
-        detail={kpis.bdOnTimePct != null ? (kpis.bdOnTimeDetail ?? undefined) : undefined}
+        label={kpis.bdAverage != null ? 'Inicio del día (BD)' : kpis.bdOnTimePct != null ? 'Inicio del día · % a tiempo' : 'Inicio del día (BD)'}
+        value={kpis.bdAverage != null ? kpis.bdAverage.toFixed(1) : kpis.bdOnTimePct != null ? `${kpis.bdOnTimePct}%` : '—'}
+        suffix={kpis.bdAverage != null ? '/ 5' : undefined}
+        detail={kpis.bdAverage == null && kpis.bdOnTimePct != null ? (kpis.bdOnTimeDetail ?? undefined) : undefined}
       />
       <KpiCard label="Cierre del día (BT)" value={kpis.btAverage != null ? kpis.btAverage.toFixed(1) : '—'} suffix="/ 5" />
       <KpiCard
@@ -133,8 +133,10 @@ export function WeeklyLineChart({ points, title = 'Evolución' }: { points: Dail
             stroke="#94a3b8"
           />
           <Tooltip formatter={(value: any, name) => (name === 'Inicio del día · % a tiempo' ? [`${value}%`, name] : [value, name])} />
-          {/* "Inicio del día" ya no trae calificación 1-5 (es un check-in por botones), así que su
-              línea mide a qué hora contestan: % que registró su entrada a tiempo (9:00-9:30 am). */}
+          {/* Desde oct 2026 "Inicio del día" usa la misma escala 1-5 que "Cierre del día", así que
+              su línea va en el mismo eje izquierdo. `bdOnTimePct` (eje derecho, %) solo tiene datos
+              en semanas con el check-in viejo por botones — ambas líneas conviven sin pisarse
+              porque nunca hay datos de las dos a la vez en el mismo punto. */}
           <Line
             yAxisId="right"
             type="monotone"
@@ -145,6 +147,7 @@ export function WeeklyLineChart({ points, title = 'Evolución' }: { points: Dail
             dot={{ r: 3 }}
             connectNulls
           />
+          <Line yAxisId="left" type="monotone" dataKey="bd" name="Inicio (BD)" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
           <Line yAxisId="left" type="monotone" dataKey="bt" name="Cierre (BT)" stroke="#0055b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         </LineChart>
       </ResponsiveContainer>

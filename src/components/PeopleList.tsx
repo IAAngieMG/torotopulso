@@ -61,7 +61,7 @@ export default function PeopleList({ onlyLeaders, onOpenPerson }: { onlyLeaders:
               </div>
             )}
             <p className="text-xs text-slate-500 mt-1">
-              BD {p.kpis.bdOnTimePct != null ? `${p.kpis.bdOnTimePct}% a tiempo` : '—'} · BT{' '}
+              BD {p.kpis.bdAverage != null ? `${p.kpis.bdAverage.toFixed(1)}/5` : p.kpis.bdOnTimePct != null ? `${p.kpis.bdOnTimePct}% a tiempo` : '—'} · BT{' '}
               {p.kpis.btAverage != null ? `${p.kpis.btAverage.toFixed(1)}/5` : '—'}
             </p>
           </button>

@@ -12,7 +12,10 @@ import { activeVacation } from './vacations.ts';
  * más de `PATTERN_DAYS_THRESHOLD` (3) días hábiles de la semana pasada, no menos:
  *  - Silencio: no respondió ninguna encuesta.
  *  - Inicio del día (BD): mide únicamente si el check-in se hizo a tiempo, máximo 9:30 am hora
- *    CDMX — no es una medida de calificación/ánimo, solo de puntualidad.
+ *    CDMX — basado en el check-in viejo por botones. Desde oct 2026 la pregunta de Inicio del
+ *    día pasó a una escala 1-5 igual que Cierre del día (ver scoring.ts `moodAverage`), pero esta
+ *    red flag de puntualidad no se ha extendido a esa calificación: solo "Cierre del día" genera
+ *    la flag de "Calificación baja" de abajo.
  *  - Alimentos (AL): mide únicamente participación (si contestó o no ese slot); el contenido de
  *    la respuesta siempre es positivo (son emojis, no una calificación de calidad), así que
  *    nunca baja el ánimo — no participar es una flag informativa, no una caída de ánimo.
