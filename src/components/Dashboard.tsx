@@ -63,7 +63,7 @@ export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson }:
         {showTabs && tab === 'personas' && <PeopleList onlyLeaders={false} onOpenPerson={onOpenPerson} />}
         {showTabs && tab === 'lideres' && <PeopleList onlyLeaders onOpenPerson={onOpenPerson} />}
 
-        <FeedbackWidget view={showTabs ? `Resumen · ${tab}` : 'Resumen y Pulso'} />
+        <FeedbackWidget view={showTabs ? `Resumen · ${tab}` : 'Resumen y Pulso'} me={me} />
       </div>
     </div>
   );

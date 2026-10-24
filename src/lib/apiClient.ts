@@ -221,6 +221,7 @@ export interface FeedbackReply {
   authorName: string;
   authorEmail: string;
   createdAt: string;
+  editedAt?: string;
 }
 
 export interface FeedbackEntry {
@@ -298,6 +299,13 @@ export function fetchMyFeedback() {
 export function replyToFeedback(id: string, message: string) {
   return api(`/api/feedback/${encodeURIComponent(id)}/reply`, {
     method: 'POST',
+    body: JSON.stringify({ message }),
+  }) as Promise<{ entry: FeedbackEntry }>;
+}
+
+export function editFeedbackReply(id: string, replyId: string, message: string) {
+  return api(`/api/feedback/${encodeURIComponent(id)}/reply/${encodeURIComponent(replyId)}`, {
+    method: 'PATCH',
     body: JSON.stringify({ message }),
   }) as Promise<{ entry: FeedbackEntry }>;
 }

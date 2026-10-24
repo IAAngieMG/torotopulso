@@ -61,6 +61,7 @@ export default function FeedbackInbox({ me }: { me: Me }) {
               </div>
               <FeedbackThread
                 entry={e}
+                me={me}
                 onUpdate={updated => setEntries(prev => prev?.map(x => (x.id === updated.id ? updated : x)) ?? prev)}
               />
             </div>

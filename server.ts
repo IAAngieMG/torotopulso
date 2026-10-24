@@ -135,6 +135,7 @@ interface FeedbackReply {
   authorName: string;
   authorEmail: string;
   createdAt: string;
+  editedAt?: string;
 }
 
 interface FeedbackEntry {
@@ -787,6 +788,32 @@ export async function createApp() {
       res.status(201).json({ entry });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible enviar la respuesta.' });
+    }
+  });
+
+  // Editar una respuesta: solo quien la escribió puede editarla (no el buzón ni el autor del
+  // feedback original, salvo que sean la misma persona que respondió).
+  app.patch('/api/feedback/:id/reply/:replyId', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const id = clean(req.params.id, 100);
+      const replyId = clean(req.params.replyId, 100);
+      const message = clean(req.body?.message, 2000);
+      if (!message) return res.status(400).json({ error: 'Escribe un mensaje antes de guardar.' });
+      const entries = await loadFeedback();
+      const entry = entries.find(e => e.id === id);
+      if (!entry) return res.status(404).json({ error: 'Feedback no encontrado.' });
+      const reply = entry.replies.find(r => r.id === replyId);
+      if (!reply) return res.status(404).json({ error: 'Respuesta no encontrada.' });
+      if (reply.authorEmail !== session.email) {
+        return res.status(403).json({ error: 'Solo puedes editar tus propias respuestas.' });
+      }
+      reply.message = message;
+      reply.editedAt = new Date().toISOString();
+      await saveFeedback(entries);
+      res.json({ entry });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible editar la respuesta.' });
     }
   });
 
