@@ -7,6 +7,7 @@ import TeamsTable from './TeamsTable.tsx';
 import PeopleList from './PeopleList.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
 import RedFlagsPanel from './RedFlagsPanel.tsx';
+import AnniversaryCard from './AnniversaryCard.tsx';
 
 type Tab = 'general' | 'equipos' | 'personas' | 'lideres';
 
@@ -39,6 +40,7 @@ export default function Dashboard({ me, onSetViewAs, onOpenTeam, onOpenPerson }:
       <TopBar me={me} onSetViewAs={onSetViewAs} />
       <div className="p-4 md:p-8 space-y-6 max-w-6xl">
         <RedFlagsPanel onOpenPerson={onOpenPerson} />
+        <AnniversaryCard />
 
         {showTabs && (
           <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit">

@@ -79,13 +79,22 @@ export function parsePreguntas(rows: string[][]): QuestionTemplate[] {
 const DAILY_SLOTS = ['BD', 'AL', 'BT'];
 
 /**
+ * Código de la encuesta especial "7 años Toroto" (aniversario), enviada una sola vez el 29 de
+ * octubre de 2026 — ver `src/lib/anniversary.ts`. Va aparte de BD/AL/BT y de la encuesta de
+ * Viernes, así que debe excluirse explícitamente de `isFridaySignal` (que de otro modo la
+ * contaría como Viernes por eliminación) y del resto de los cálculos de KPIs normales.
+ */
+export const ANIV7_QCODE = 'ANIV7';
+
+/**
  * `Respuestas.qCode` no usa un código "VIERNES" literal para la encuesta larga del viernes:
  * usa códigos de pregunta rotativos (Q1..Q4, uno por semana, según cuál de las 4 preguntas del
- * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT es, por eliminación, una respuesta
- * de la encuesta de Viernes.
+ * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT/ANIV7 es, por eliminación, una
+ * respuesta de la encuesta de Viernes.
  */
 export function isFridaySignal(qCode: string): boolean {
-  return !DAILY_SLOTS.includes(qCode.toUpperCase());
+  const upper = qCode.toUpperCase();
+  return upper !== ANIV7_QCODE && !DAILY_SLOTS.includes(upper);
 }
 
 const MES_ES = [
