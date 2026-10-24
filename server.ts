@@ -21,9 +21,11 @@ import {
   parseRespuestas,
   parsePreguntas,
   currentQuestionFor,
+  ANIV7_QCODE,
   type ResponseRecord,
   type QuestionTemplate,
 } from './src/lib/pulseData.ts';
+import { isAnniversaryCardVisible, computeAnniversarySummaryByTeam } from './src/lib/anniversary.ts';
 import { ORG_TEAMS, allTeamNames, fullNameFor, firstNameFor, rosterEmailsForTeam, rosterForTeams, teamByName } from './src/lib/orgChart.ts';
 import {
   resolveOrgAccess,
@@ -66,7 +68,10 @@ function verifySessionToken(token: string) {
 // El organigrama (equipos, líderes, permisos) ya no vive en el Sheet — es estático, ver
 // src/lib/orgChart.ts. Solo `Respuestas` y `Preguntas` siguen viniendo en vivo del Sheet.
 interface PulseData {
+  /** Respuestas normales (BD/AL/BT/Viernes) — nunca incluye la encuesta de aniversario "7 años Toroto". */
   responses: ResponseRecord[];
+  /** Solo las respuestas de la encuesta "7 años Toroto" (qCode ANIV7) — separadas de los KPIs normales. */
+  anniversaryResponses: ResponseRecord[];
   preguntas: QuestionTemplate[];
 }
 
@@ -82,8 +87,10 @@ async function loadPulseData(): Promise<PulseData> {
         fetchSheetRows(SHEET_ID, 'Respuestas'),
         fetchSheetRows(SHEET_ID, 'Preguntas'),
       ]);
+      const allResponses = parseRespuestas(respuestasRows);
       const data: PulseData = {
-        responses: parseRespuestas(respuestasRows),
+        responses: allResponses.filter(r => r.qCode !== ANIV7_QCODE),
+        anniversaryResponses: allResponses.filter(r => r.qCode === ANIV7_QCODE),
         preguntas: parsePreguntas(preguntasRows),
       };
       cache = { data, fetchedAt: Date.now() };
@@ -514,6 +521,34 @@ export async function createApp() {
     const people = computeRedFlagsForRoster(roster, data.responses, new Date());
     const vacations = computeVacationStatusForRoster(roster, new Date());
     res.json({ people, vacations });
+  });
+
+  // Tarjeta "7 años Toroto" (aniversario) — separada de las métricas normales, ver
+  // src/lib/anniversary.ts. Mismo criterio de alcance que /api/pulse/red-flags: en el inicio del
+  // dashboard cada líder ve solo su(s) equipo(s) de casa; dentro del detalle de un equipo se
+  // acota a ese equipo con `?team=`.
+  app.get('/api/pulse/anniversary', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
+    const access = resolveOrgAccess(effective.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const visible = isAnniversaryCardVisible(new Date());
+    if (!visible) return res.json({ visible: false, teams: [] });
+
+    const data = await loadPulseData();
+    const myTeams = scopedTeamNames(access);
+    const requestedTeam = clean(req.query.team as string, 200);
+    if (requestedTeam && !myTeams.includes(requestedTeam)) {
+      return res.status(403).json({ error: 'No tienes acceso a ese equipo.' });
+    }
+
+    const homeTeams = effective.email === 'ivancastro@toroto.mx' || !access.primaryTeam ? myTeams : [access.primaryTeam];
+    const teamsInScope = requestedTeam ? [requestedTeam] : homeTeams;
+
+    const roster = rosterForTeams(teamsInScope);
+    const teams = computeAnniversarySummaryByTeam(roster, data.anniversaryResponses);
+    res.json({ visible: true, teams });
   });
 
   app.get('/api/pulse/teams-summary', async (req, res) => {

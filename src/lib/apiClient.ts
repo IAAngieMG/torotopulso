@@ -77,6 +77,7 @@ export interface VacationStatus {
   team: string;
   message: string;
   isMaternity: boolean;
+  isOff: boolean;
 }
 
 export interface Kpis {
@@ -150,6 +151,28 @@ export interface TeamMember {
   isLeader: boolean;
   kpis: Kpis;
   vacationLabel: string | null;
+}
+
+export interface AnniversaryDistributionEntry {
+  choice: number;
+  emoji: string;
+  label: string;
+  count: number;
+  pct: number;
+}
+
+export interface AnniversaryRespondent {
+  email: string;
+  fullName: string;
+  choiceLabel: string;
+}
+
+export interface AnniversaryTeamSummary {
+  team: string;
+  total: number;
+  answered: number;
+  distribution: AnniversaryDistributionEntry[];
+  respondents: AnniversaryRespondent[];
 }
 
 export interface TeamDetail {
@@ -229,6 +252,11 @@ export function fetchOverview(range: RangeOption, signal: SignalOption, team?: s
 export function fetchRedFlags(team?: string) {
   const q = team ? `?team=${encodeURIComponent(team)}` : '';
   return api(`/api/pulse/red-flags${q}`) as Promise<{ people: PersonRedFlags[]; vacations: VacationStatus[] }>;
+}
+
+export function fetchAnniversary(team?: string) {
+  const q = team ? `?team=${encodeURIComponent(team)}` : '';
+  return api(`/api/pulse/anniversary${q}`) as Promise<{ visible: boolean; teams: AnniversaryTeamSummary[] }>;
 }
 
 export function fetchTeamsSummary(range: RangeOption, signal: SignalOption = 'ALL') {

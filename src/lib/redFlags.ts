@@ -25,11 +25,12 @@ import { activeVacation } from './vacations.ts';
  *    viejo por botones, identificado por traer `choice` poblado, nunca cuenta aquí aunque también
  *    traiga `rawScore`) — "Alimentos" nunca genera esta flag, sin importar su calificación.
  *
- * Los días hábiles en los que la persona estaba de vacaciones (src/lib/vacations.ts, alcance
- * "all") no cuentan para ningún patrón (ni como silencio ni como parte del denominador) — las
- * vacaciones nunca son una red flag, ni siquiera informativa; ya se muestran aparte junto al
- * nombre de la persona (`vacationLabel`/`VacationBadge`). Los días hábiles fuera del rango de
- * vacaciones de esa misma semana siguen las reglas normales.
+ * Los días hábiles en los que la persona estaba de vacaciones, maternidad o "en off" (sin
+ * mensajes de Pulso; src/lib/vacations.ts, alcance "all") no cuentan para ningún patrón (ni como
+ * silencio ni como parte del denominador) — ninguna de esas ausencias es una red flag, ni
+ * siquiera informativa; ya se muestran aparte junto al nombre de la persona
+ * (`vacationLabel`/`VacationBadge`). Los días hábiles fuera de ese rango en esa misma semana
+ * siguen las reglas normales.
  *
  * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
  * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
@@ -335,6 +336,8 @@ export interface VacationStatus {
   message: string;
   /** True si el motivo de la ausencia es maternidad, para distinguirla visualmente de vacaciones normales. */
   isMaternity: boolean;
+  /** True si es un período "En off" (Pulso no le envía mensajes), distinto de vacaciones/maternidad. */
+  isOff: boolean;
 }
 
 /**
@@ -359,6 +362,7 @@ export function computeVacationStatusForRoster(roster: RosterPerson[], now = new
       team: person.team,
       message: `${reason} ${vacationDays.length} de ${weekdays.length} días hábiles de la semana pasada — no se espera respuesta esos días.`,
       isMaternity: reason === 'De maternidad',
+      isOff: reason === 'En off',
     });
   }
   return result;
