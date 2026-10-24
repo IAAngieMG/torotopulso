@@ -192,6 +192,14 @@ export interface PersonDetail {
   lastWeekInsight: AutoInsight;
 }
 
+export interface FeedbackReply {
+  id: string;
+  message: string;
+  authorName: string;
+  authorEmail: string;
+  createdAt: string;
+}
+
 export interface FeedbackEntry {
   id: string;
   message: string;
@@ -199,6 +207,7 @@ export interface FeedbackEntry {
   authorEmail: string;
   view: string;
   createdAt: string;
+  replies: FeedbackReply[];
 }
 
 export type { RangeOption } from './scoring.ts';
@@ -252,6 +261,17 @@ export function fetchFeedbackInbox() {
 
 export function deleteFeedback(id: string) {
   return api(`/api/feedback/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function fetchMyFeedback() {
+  return api('/api/feedback/mine') as Promise<{ entries: FeedbackEntry[] }>;
+}
+
+export function replyToFeedback(id: string, message: string) {
+  return api(`/api/feedback/${encodeURIComponent(id)}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  }) as Promise<{ entry: FeedbackEntry }>;
 }
 
 export interface ApiTokenInfo {

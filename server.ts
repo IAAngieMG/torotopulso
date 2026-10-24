@@ -122,6 +122,14 @@ function blobsStore(name: string) {
   return siteID && token ? getStore({ name, siteID, token }) : getStore(name);
 }
 
+interface FeedbackReply {
+  id: string;
+  message: string;
+  authorName: string;
+  authorEmail: string;
+  createdAt: string;
+}
+
 interface FeedbackEntry {
   id: string;
   message: string;
@@ -129,18 +137,39 @@ interface FeedbackEntry {
   authorEmail: string;
   view: string;
   createdAt: string;
+  replies: FeedbackReply[];
+}
+
+/**
+ * Quién puede ver y responder el hilo de un feedback: el buzón (Karla, Samantha, Angie) y la
+ * persona que lo dejó. Deja esto como único punto de verdad para no desalinear GET/POST.
+ */
+function canAccessFeedbackThread(email: string, entry: FeedbackEntry): boolean {
+  return FEEDBACK_INBOX_EMAILS.includes(email) || entry.authorEmail === email;
+}
+
+// Punto de enganche para notificaciones: se llama cada vez que se crea una respuesta en un hilo
+// de feedback. El hilo de notificaciones (correo + campanita) puede wirearlo aquí sin tocar el
+// resto de este archivo.
+function onFeedbackReplyCreated(_entry: FeedbackEntry, _reply: FeedbackReply) {
+  // TODO(notificaciones): avisar por correo y en la campanita a quien no escribió esta respuesta
+  // (el autor original del feedback si respondió el buzón, o el buzón si respondió el autor).
 }
 
 async function loadFeedback(): Promise<FeedbackEntry[]> {
+  let entries: any[];
   if (useNetlifyBlobs) {
     const remote = await blobsStore('pulso-toroto').get('feedback', { type: 'json' });
-    return Array.isArray(remote) ? (remote as FeedbackEntry[]) : [];
+    entries = Array.isArray(remote) ? remote : [];
+  } else {
+    try {
+      entries = JSON.parse(fs.readFileSync(feedbackFile, 'utf8'));
+    } catch {
+      entries = [];
+    }
   }
-  try {
-    return JSON.parse(fs.readFileSync(feedbackFile, 'utf8'));
-  } catch {
-    return [];
-  }
+  // Compatibilidad con entradas guardadas antes de que existiera el hilo de respuestas.
+  return entries.map(e => ({ ...e, replies: Array.isArray(e.replies) ? e.replies : [] }));
 }
 
 async function saveFeedback(entries: FeedbackEntry[]) {
@@ -637,6 +666,7 @@ export async function createApp() {
         authorEmail: session.email,
         view,
         createdAt: new Date().toISOString(),
+        replies: [],
       });
       await saveFeedback(entries);
 
@@ -666,6 +696,48 @@ export async function createApp() {
       res.json({ entries: entries.reverse() });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible cargar el feedback.' });
+    }
+  });
+
+  // Feedback propio de quien lo escribió (no tiene que estar en el buzón para ver su propio hilo).
+  app.get('/api/feedback/mine', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const entries = await loadFeedback();
+      const mine = entries.filter(e => e.authorEmail === session.email).reverse();
+      res.json({ entries: mine });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible cargar tu feedback.' });
+    }
+  });
+
+  // Respuesta en hilo: puede responder quien dejó el feedback o el buzón (Karla, Samantha, Angie).
+  // Las dos partes ven el hilo completo (ver canAccessFeedbackThread).
+  app.post('/api/feedback/:id/reply', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const id = clean(req.params.id, 100);
+      const message = clean(req.body?.message, 2000);
+      if (!message) return res.status(400).json({ error: 'Escribe un mensaje antes de enviar.' });
+      const entries = await loadFeedback();
+      const entry = entries.find(e => e.id === id);
+      if (!entry) return res.status(404).json({ error: 'Feedback no encontrado.' });
+      if (!canAccessFeedbackThread(session.email, entry)) {
+        return res.status(403).json({ error: 'No tienes acceso a este hilo de feedback.' });
+      }
+      const reply: FeedbackReply = {
+        id: `fbr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        message,
+        authorName: session.name,
+        authorEmail: session.email,
+        createdAt: new Date().toISOString(),
+      };
+      entry.replies.push(reply);
+      await saveFeedback(entries);
+      onFeedbackReplyCreated(entry, reply);
+      res.status(201).json({ entry });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible enviar la respuesta.' });
     }
   });
 

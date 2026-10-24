@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { deleteFeedback, fetchFeedbackInbox, type FeedbackEntry, type Me } from '../lib/apiClient.ts';
 import { TopBar } from './Shell.tsx';
+import FeedbackThread from './FeedbackThread.tsx';
 
 export default function FeedbackInbox({ me }: { me: Me }) {
   const [entries, setEntries] = useState<FeedbackEntry[] | null>(null);
@@ -38,24 +39,30 @@ export default function FeedbackInbox({ me }: { me: Me }) {
         {entries?.length === 0 && <p className="text-sm text-slate-500">Todavía no hay feedback registrado.</p>}
         <div className="space-y-3">
           {entries?.map(e => (
-            <div key={e.id} className="rounded-xl border border-toroto-border bg-white p-4 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm text-[#0b1c30]">{e.message}</p>
-                <p className="text-xs text-slate-400 mt-2">
-                  {e.authorName} · {e.authorEmail} · {new Date(e.createdAt).toLocaleString('es-MX')}
-                  {e.view ? ` · desde "${e.view}"` : ''}
-                </p>
+            <div key={e.id} className="rounded-xl border border-toroto-border bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-sm text-[#0b1c30]">{e.message}</p>
+                  <p className="text-xs text-slate-400 mt-2">
+                    {e.authorName} · {e.authorEmail} · {new Date(e.createdAt).toLocaleString('es-MX')}
+                    {e.view ? ` · desde "${e.view}"` : ''}
+                  </p>
+                </div>
+                {me.canDeleteFeedback && (
+                  <button
+                    onClick={() => remove(e.id)}
+                    disabled={deletingId === e.id}
+                    title="Eliminar (ya solucionado o visto)"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 shrink-0"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </div>
-              {me.canDeleteFeedback && (
-                <button
-                  onClick={() => remove(e.id)}
-                  disabled={deletingId === e.id}
-                  title="Eliminar (ya solucionado o visto)"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 shrink-0"
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
+              <FeedbackThread
+                entry={e}
+                onUpdate={updated => setEntries(prev => prev?.map(x => (x.id === updated.id ? updated : x)) ?? prev)}
+              />
             </div>
           ))}
         </div>
