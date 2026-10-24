@@ -16,9 +16,22 @@ export interface VacationPeriod {
 
 export const VACATIONS: VacationPeriod[] = [
   { email: 'emiliano@toroto.mx', until: '2026-10-05', scope: 'all', reason: 'De vacaciones' },
-  { email: 'david@toroto.mx', from: '2026-10-05', until: '2026-10-26', scope: 'all', reason: 'De vacaciones' },
   { email: 'valentina@toroto.mx', from: '2026-10-08', until: '2026-10-12', scope: 'all', reason: 'De vacaciones' },
   { email: 'ane@toroto.mx', until: '2027-02-08', scope: 'all', reason: 'De maternidad' },
+
+  // Períodos en los que Pulso no envía mensajes a la persona (instrucción de Angie, 2026-10-24):
+  // no cuentan como red flag de silencio ni en la tasa de respuesta de nadie mientras están
+  // activos, igual que vacaciones/maternidad, pero se muestran aparte con la etiqueta "En off".
+  { email: 'david@toroto.mx', from: '2026-10-05', until: '2026-10-31', scope: 'all', reason: 'En off' },
+  { email: 'octabio@toroto.mx', until: '2026-10-26', scope: 'all', reason: 'En off' },
+  { email: 'renan@toroto.mx', from: '2026-10-26', until: '2026-10-30', scope: 'all', reason: 'En off' },
+  { email: 'andrea@toroto.mx', from: '2026-10-26', until: '2026-11-06', scope: 'all', reason: 'En off' },
+  { email: 'sofiasanchez@toroto.mx', from: '2026-10-26', until: '2026-11-16', scope: 'all', reason: 'En off' },
+  { email: 'mariajose@toroto.mx', from: '2026-11-02', until: '2026-11-06', scope: 'all', reason: 'En off' },
+  { email: 'luisloyde@toroto.mx', from: '2026-11-09', until: '2026-11-13', scope: 'all', reason: 'En off' },
+  { email: 'karen@toroto.mx', from: '2026-11-13', until: '2026-11-20', scope: 'all', reason: 'En off' },
+  { email: 'guillermina@toroto.mx', from: '2026-11-16', until: '2026-11-19', scope: 'all', reason: 'En off' },
+  { email: 'karla@toroto.mx', from: '2026-12-21', until: '2026-12-31', scope: 'all', reason: 'En off' },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();
@@ -53,9 +66,14 @@ function formatDateEs(dateKey: string): string {
   return `${d} de ${MESES[(m || 1) - 1]}${y !== new Date().getFullYear() ? ` de ${y}` : ''}`;
 }
 
-/** Leyenda corta para mostrar junto al nombre de la persona (ej. "De vacaciones hasta el 5 de octubre"). */
+/**
+ * Leyenda corta para mostrar junto al nombre de la persona (ej. "De vacaciones hasta el 5 de
+ * octubre", o "En off del 26 al 30 de octubre" cuando el período tiene fecha de inicio conocida).
+ */
 export function vacationLabel(period: VacationPeriod): string {
-  return `${period.reason} hasta el ${formatDateEs(period.until)}`;
+  const untilStr = formatDateEs(period.until);
+  if (period.from) return `${period.reason} del ${formatDateEs(period.from)} al ${untilStr}`;
+  return `${period.reason} hasta el ${untilStr}`;
 }
 
 /** True si esa persona debe excluirse de la participación/expectativa de ese signal en `at`. */
@@ -68,4 +86,13 @@ export function isExcludedFromSignal(email: string, signal: string, at: Date = n
 /** Quita del roster a quien esté excluido de ese signal por vacaciones/ausencia. */
 export function filterVacationingEmails(emails: Iterable<string>, signal: string, at: Date = new Date()): string[] {
   return [...emails].filter(email => !isExcludedFromSignal(email, signal, at));
+}
+
+/**
+ * True si a esa persona Pulso no le envía ningún mensaje en `at` (vacaciones, maternidad o un
+ * período "En off"): todos usan `scope: 'all'`. Útil para que notificaciones y encuestas
+ * especiales (ej. "7 años Toroto") sepan a quién saltarse sin duplicar esta lógica.
+ */
+export function isPersonOff(email: string, at: Date = new Date()): boolean {
+  return activeVacation(email, at)?.scope === 'all';
 }
