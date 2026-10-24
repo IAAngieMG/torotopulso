@@ -57,13 +57,16 @@ export function AiInsightCard({ insight, title = 'Pulso IA' }: { insight: AutoIn
 /** Leyenda de vacaciones/ausencia junto al nombre de una persona, para que su líder lo sepa a simple vista. */
 export function VacationBadge({ label }: { label: string }) {
   const isMaternity = label.startsWith('De maternidad');
+  const isOff = label.startsWith('En off');
   const classes = isMaternity
     ? 'text-sky-700 bg-sky-50 border-sky-300'
-    : 'text-yellow-700 bg-yellow-50 border-yellow-300';
+    : isOff
+      ? 'text-orange-700 bg-orange-50 border-orange-300'
+      : 'text-yellow-700 bg-yellow-50 border-yellow-300';
   const Icon = isMaternity ? Baby : TreePalm;
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold border rounded-full px-1.5 py-0.5 ${classes}`}>
-      <Icon size={10} /> {label}
+      <Icon size={10} /> {isOff ? `🌴 ${label}` : label}
     </span>
   );
 }

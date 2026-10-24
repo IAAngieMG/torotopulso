@@ -89,9 +89,9 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
         </div>
       )}
 
-      {vacations.filter(v => !v.isMaternity).length > 0 &&
+      {vacations.filter(v => !v.isMaternity && !v.isOff).length > 0 &&
         (() => {
-          const onVacation = vacations.filter(v => !v.isMaternity);
+          const onVacation = vacations.filter(v => !v.isMaternity && !v.isOff);
           return (
             <div className="rounded-xl border border-yellow-300 bg-yellow-50 overflow-hidden">
               <button
@@ -159,6 +159,45 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
                       <p className="text-xs text-sky-700 mt-2">{v.message}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+      {vacations.filter(v => v.isOff).length > 0 &&
+        (() => {
+          const onOff = vacations.filter(v => v.isOff);
+          return (
+            <div className="rounded-xl border border-orange-300 bg-orange-50 overflow-hidden">
+              <button
+                onClick={() => setVacationsExpanded(v => !v)}
+                className="w-full flex items-center justify-between gap-2 p-4 text-left hover:bg-orange-100/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Palmtree size={16} className="text-orange-600" />
+                  <span className="font-display font-semibold text-sm text-orange-900">
+                    🌴 En off · {onOff.length} persona{onOff.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                {vacationsExpanded ? <ChevronUp size={16} className="text-orange-700" /> : <ChevronDown size={16} className="text-orange-700" />}
+              </button>
+              {vacationsExpanded && (
+                <div className="grid sm:grid-cols-2 gap-2 p-4 pt-0">
+                  {onOff.map(v => (
+                    <button
+                      key={v.email}
+                      onClick={() => onOpenPerson(v.email)}
+                      className="text-left rounded-lg border border-orange-300 p-3 bg-white hover:border-toroto-primary transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-[#0b1c30]">{v.fullName}</p>
+                        <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{v.team}</p>
+                      <p className="text-xs text-orange-700 mt-2">{v.message}</p>
                     </button>
                   ))}
                 </div>

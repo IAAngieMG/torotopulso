@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { activeVacation, isExcludedFromSignal, filterVacationingEmails, vacationLabel } from './vacations.ts';
+import { activeVacation, isExcludedFromSignal, filterVacationingEmails, vacationLabel, isPersonOff } from './vacations.ts';
 
 test('Emiliano está de vacaciones (todo signal) hasta el 5 de octubre 2026', () => {
   const before = new Date('2026-09-28T15:00:00.000Z');
@@ -20,7 +20,7 @@ test('Emiliano deja de estar de vacaciones después del 5 de octubre', () => {
   assert.equal(isExcludedFromSignal('emiliano@toroto.mx', 'BD', after), false);
 });
 
-test('David está de vacaciones (todo signal) del 5 al 26 de octubre 2026, no antes', () => {
+test('David está en off (todo signal) del 5 al 31 de octubre 2026, no antes', () => {
   const before = new Date('2026-09-28T15:00:00.000Z');
   assert.equal(activeVacation('david@toroto.mx', before), null);
   assert.equal(isExcludedFromSignal('david@toroto.mx', 'BD', before), false);
@@ -28,15 +28,23 @@ test('David está de vacaciones (todo signal) del 5 al 26 de octubre 2026, no an
 
   const during = new Date('2026-10-15T15:00:00.000Z');
   const active = activeVacation('david@toroto.mx', during);
-  assert.ok(active, 'debe estar de vacaciones');
+  assert.ok(active, 'debe estar en off');
   assert.equal(active!.scope, 'all');
   assert.ok(isExcludedFromSignal('david@toroto.mx', 'BD', during));
   assert.ok(isExcludedFromSignal('david@toroto.mx', 'AL', during));
   assert.ok(isExcludedFromSignal('david@toroto.mx', 'BT', during));
   assert.ok(isExcludedFromSignal('david@toroto.mx', 'VIERNES', during));
 
-  const after = new Date('2026-10-27T15:00:00.000Z');
+  const after = new Date('2026-11-01T15:00:00.000Z');
   assert.equal(activeVacation('david@toroto.mx', after), null);
+});
+
+test('isPersonOff es true durante un período "En off" y false fuera de rango', () => {
+  assert.ok(isPersonOff('octabio@toroto.mx', new Date('2026-10-25T15:00:00.000Z')));
+  assert.equal(isPersonOff('octabio@toroto.mx', new Date('2026-10-27T15:00:00.000Z')), false);
+  assert.ok(isPersonOff('renan@toroto.mx', new Date('2026-10-28T15:00:00.000Z')));
+  assert.equal(isPersonOff('renan@toroto.mx', new Date('2026-10-24T15:00:00.000Z')), false);
+  assert.ok(isPersonOff('karla@toroto.mx', new Date('2026-12-25T15:00:00.000Z')));
 });
 
 test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () => {
