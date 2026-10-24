@@ -279,3 +279,27 @@ export function createApiToken(label: string) {
 export function revokeApiToken(id: string) {
   return api(`/api/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+export type NotificationType = 'feedback_new' | 'feedback_reply' | 'survey_pending';
+
+export interface NotificationEntry {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export function fetchNotifications() {
+  return api('/api/notifications') as Promise<{ notifications: NotificationEntry[]; unreadCount: number }>;
+}
+
+export function markNotificationRead(id: string) {
+  return api(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+}
+
+export function markAllNotificationsRead() {
+  return api('/api/notifications/read-all', { method: 'POST' });
+}
