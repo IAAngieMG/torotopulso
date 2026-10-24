@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Heart, Send } from 'lucide-react';
-import { sendFeedback } from '../lib/apiClient.ts';
+import { fetchMyFeedback, sendFeedback, type FeedbackEntry } from '../lib/apiClient.ts';
+import FeedbackThread from './FeedbackThread.tsx';
 
 export default function FeedbackWidget({ view }: { view: string }) {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [mine, setMine] = useState<FeedbackEntry[]>([]);
+
+  const loadMine = () => {
+    fetchMyFeedback()
+      .then(d => setMine(d.entries))
+      .catch(() => {});
+  };
+
+  useEffect(loadMine, []);
 
   const submit = async () => {
     if (!message.trim()) return;
@@ -13,6 +23,7 @@ export default function FeedbackWidget({ view }: { view: string }) {
       await sendFeedback(message.trim(), view);
       setMessage('');
       setStatus('sent');
+      loadMine();
     } catch {
       setStatus('error');
     }
@@ -48,6 +59,18 @@ export default function FeedbackWidget({ view }: { view: string }) {
       <p className="text-[11px] text-slate-400 mt-2">
         Tu nombre, correo y la vista actual se adjuntan automáticamente para que no tengas que escribirlos.
       </p>
+      {mine.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-toroto-border space-y-3">
+          <p className="text-xs font-semibold text-slate-500">Tus feedbacks anteriores</p>
+          {mine.map(e => (
+            <div key={e.id} className="rounded-lg bg-slate-50 p-3">
+              <p className="text-sm text-[#0b1c30]">{e.message}</p>
+              <p className="text-xs text-slate-400 mt-1">{new Date(e.createdAt).toLocaleString('es-MX')}</p>
+              <FeedbackThread entry={e} onUpdate={updated => setMine(prev => prev.map(x => (x.id === updated.id ? updated : x)))} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
