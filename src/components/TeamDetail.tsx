@@ -98,7 +98,7 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
           </>
         )}
 
-        <FeedbackWidget view={`Detalle de equipo · ${team}`} />
+        <FeedbackWidget view={`Detalle de equipo · ${team}`} me={me} />
       </div>
     </div>
   );

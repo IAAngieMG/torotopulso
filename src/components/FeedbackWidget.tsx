@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Heart, Send } from 'lucide-react';
-import { fetchMyFeedback, sendFeedback, type FeedbackEntry } from '../lib/apiClient.ts';
+import { fetchMyFeedback, sendFeedback, type FeedbackEntry, type Me } from '../lib/apiClient.ts';
 import FeedbackThread from './FeedbackThread.tsx';
 
-export default function FeedbackWidget({ view }: { view: string }) {
+export default function FeedbackWidget({ view, me }: { view: string; me: Me }) {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [mine, setMine] = useState<FeedbackEntry[]>([]);
@@ -66,7 +66,7 @@ export default function FeedbackWidget({ view }: { view: string }) {
             <div key={e.id} className="rounded-lg bg-slate-50 p-3">
               <p className="text-sm text-[#0b1c30]">{e.message}</p>
               <p className="text-xs text-slate-400 mt-1">{new Date(e.createdAt).toLocaleString('es-MX')}</p>
-              <FeedbackThread entry={e} onUpdate={updated => setMine(prev => prev.map(x => (x.id === updated.id ? updated : x)))} />
+              <FeedbackThread entry={e} me={me} onUpdate={updated => setMine(prev => prev.map(x => (x.id === updated.id ? updated : x)))} />
             </div>
           ))}
         </div>
