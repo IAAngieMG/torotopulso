@@ -148,12 +148,26 @@ function canAccessFeedbackThread(email: string, entry: FeedbackEntry): boolean {
   return FEEDBACK_INBOX_EMAILS.includes(email) || entry.authorEmail === email;
 }
 
-// Punto de enganche para notificaciones: se llama cada vez que se crea una respuesta en un hilo
-// de feedback. El hilo de notificaciones (correo + campanita) puede wirearlo aquí sin tocar el
-// resto de este archivo.
-function onFeedbackReplyCreated(_entry: FeedbackEntry, _reply: FeedbackReply) {
-  // TODO(notificaciones): avisar por correo y en la campanita a quien no escribió esta respuesta
-  // (el autor original del feedback si respondió el buzón, o el buzón si respondió el autor).
+// Se llama cada vez que se crea una respuesta en un hilo de feedback: avisa (campanita + correo)
+// a quien no escribió esta respuesta — el buzón (menos quien respondió, si es parte de él) y,
+// aparte, a la autora/el autor original del feedback si no es ya parte del buzón y no fue quien
+// respondió. El buzón recibe un link a "Feedback recibido"; el autor, a la vista donde deja
+// feedback (no tiene una vista de "mi feedback" propia — ver FeedbackWidget).
+function onFeedbackReplyCreated(entry: FeedbackEntry, reply: FeedbackReply) {
+  const preview = reply.message.length > 140 ? `${reply.message.slice(0, 140)}…` : reply.message;
+  const title = 'Nueva respuesta en un hilo de feedback';
+  const body = `${reply.authorName} respondió: "${preview}"`;
+
+  pushNotifications(FEEDBACK_INBOX_EMAILS.filter(e => e !== reply.authorEmail), {
+    type: 'feedback_reply',
+    title,
+    body,
+    link: '#/feedback',
+  }).catch(() => {});
+
+  if (entry.authorEmail !== reply.authorEmail && !FEEDBACK_INBOX_EMAILS.includes(entry.authorEmail)) {
+    pushNotifications([entry.authorEmail], { type: 'feedback_reply', title, body, link: '#/' }).catch(() => {});
+  }
 }
 
 async function loadFeedback(): Promise<FeedbackEntry[]> {
