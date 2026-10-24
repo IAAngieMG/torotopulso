@@ -179,7 +179,7 @@ export default function RedFlagsPanel({ onOpenPerson, team }: { onOpenPerson: (e
                 <span className="flex items-center gap-2">
                   <Palmtree size={16} className="text-orange-600" />
                   <span className="font-display font-semibold text-sm text-orange-900">
-                    🌴 En off · {onOff.length} persona{onOff.length === 1 ? '' : 's'}
+                    En off · {onOff.length} persona{onOff.length === 1 ? '' : 's'}
                   </span>
                 </span>
                 {vacationsExpanded ? <ChevronUp size={16} className="text-orange-700" /> : <ChevronDown size={16} className="text-orange-700" />}
