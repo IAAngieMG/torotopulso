@@ -5,6 +5,7 @@ import { TopBar } from './Shell.tsx';
 import { KpiGrid, WeeklyLineChart, EnergyDistributionCard, RangeSignalControls, chartTitleFor, VacationBadge } from './PulseWidgets.tsx';
 import FeedbackWidget from './FeedbackWidget.tsx';
 import RedFlagsPanel from './RedFlagsPanel.tsx';
+import AnniversaryCard from './AnniversaryCard.tsx';
 
 interface TeamDetailProps {
   me: Me;
@@ -47,6 +48,7 @@ export default function TeamDetail({ me, onSetViewAs, team, onBack, onOpenPerson
         <RangeSignalControls range={range} onRange={setRange} signal={signal} onSignal={setSignal} />
 
         <RedFlagsPanel team={team} onOpenPerson={onOpenPerson} />
+        <AnniversaryCard team={team} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <p className="text-sm text-slate-500">Cargando…</p>}
