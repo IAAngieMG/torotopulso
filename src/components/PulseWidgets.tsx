@@ -66,7 +66,7 @@ export function VacationBadge({ label }: { label: string }) {
   const Icon = isMaternity ? Baby : TreePalm;
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold border rounded-full px-1.5 py-0.5 ${classes}`}>
-      <Icon size={10} /> {isOff ? `🌴 ${label}` : label}
+      <Icon size={10} /> {label}
     </span>
   );
 }
