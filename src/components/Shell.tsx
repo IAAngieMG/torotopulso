@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { LogOut, Home, MessageCircleHeart, KeyRound } from 'lucide-react';
 import { TOKEN_KEY, type Me } from '../lib/apiClient.ts';
 import ApiTokensModal from './ApiTokensModal.tsx';
+import NotificationBell from './NotificationBell.tsx';
 
 interface ShellProps {
   me: Me;
@@ -98,6 +99,7 @@ export function TopBar({ me, extra, onSetViewAs }: { me: Me; extra?: ReactNode; 
         </div>
         <div className="flex items-center gap-2">
           {extra}
+          <NotificationBell />
           {me.canUseViewAs && onSetViewAs && (
             <select
               value={me.isViewingAs ? me.email : ''}

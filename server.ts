@@ -47,6 +47,8 @@ import {
   kpisForPersonInRange,
   type RangeFilter,
 } from './src/lib/scoring.ts';
+import { buildNotification, notificationsFor, type NotificationEntry, type NotificationType } from './src/lib/notifications.ts';
+import { sendNotificationEmail } from './src/lib/email.ts';
 
 const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
 
@@ -153,12 +155,26 @@ function canAccessFeedbackThread(email: string, entry: FeedbackEntry): boolean {
   return FEEDBACK_INBOX_EMAILS.includes(email) || entry.authorEmail === email;
 }
 
-// Punto de enganche para notificaciones: se llama cada vez que se crea una respuesta en un hilo
-// de feedback. El hilo de notificaciones (correo + campanita) puede wirearlo aquí sin tocar el
-// resto de este archivo.
-function onFeedbackReplyCreated(_entry: FeedbackEntry, _reply: FeedbackReply) {
-  // TODO(notificaciones): avisar por correo y en la campanita a quien no escribió esta respuesta
-  // (el autor original del feedback si respondió el buzón, o el buzón si respondió el autor).
+// Se llama cada vez que se crea una respuesta en un hilo de feedback: avisa (campanita + correo)
+// a quien no escribió esta respuesta — el buzón (menos quien respondió, si es parte de él) y,
+// aparte, a la autora/el autor original del feedback si no es ya parte del buzón y no fue quien
+// respondió. El buzón recibe un link a "Feedback recibido"; el autor, a la vista donde deja
+// feedback (no tiene una vista de "mi feedback" propia — ver FeedbackWidget).
+function onFeedbackReplyCreated(entry: FeedbackEntry, reply: FeedbackReply) {
+  const preview = reply.message.length > 140 ? `${reply.message.slice(0, 140)}…` : reply.message;
+  const title = 'Nueva respuesta en un hilo de feedback';
+  const body = `${reply.authorName} respondió: "${preview}"`;
+
+  pushNotifications(FEEDBACK_INBOX_EMAILS.filter(e => e !== reply.authorEmail), {
+    type: 'feedback_reply',
+    title,
+    body,
+    link: '#/feedback',
+  }).catch(() => {});
+
+  if (entry.authorEmail !== reply.authorEmail && !FEEDBACK_INBOX_EMAILS.includes(entry.authorEmail)) {
+    pushNotifications([entry.authorEmail], { type: 'feedback_reply', title, body, link: '#/' }).catch(() => {});
+  }
 }
 
 async function loadFeedback(): Promise<FeedbackEntry[]> {
@@ -184,6 +200,57 @@ async function saveFeedback(entries: FeedbackEntry[]) {
   }
   fs.mkdirSync(path.dirname(feedbackFile), { recursive: true });
   fs.writeFileSync(feedbackFile, JSON.stringify(entries, null, 2));
+}
+
+// --- Notificaciones (campanita + correo) ------------------------------------
+const notificationsFile = path.resolve(process.env.NOTIFICATIONS_FILE || './data/pulso-notifications.json');
+
+async function loadNotifications(): Promise<NotificationEntry[]> {
+  if (useNetlifyBlobs) {
+    const remote = await blobsStore('pulso-toroto').get('notifications', { type: 'json' });
+    return Array.isArray(remote) ? (remote as NotificationEntry[]) : [];
+  }
+  try {
+    return JSON.parse(fs.readFileSync(notificationsFile, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+async function saveNotifications(entries: NotificationEntry[]) {
+  if (useNetlifyBlobs) {
+    await blobsStore('pulso-toroto').setJSON('notifications', entries);
+    return;
+  }
+  fs.mkdirSync(path.dirname(notificationsFile), { recursive: true });
+  fs.writeFileSync(notificationsFile, JSON.stringify(entries, null, 2));
+}
+
+/**
+ * Crea una o más notificaciones (campanita) de un solo golpe — un solo load+save, para no perder
+ * ninguna por una carrera entre lecturas/escrituras concurrentes si se notifica a varios
+ * destinatarios a la vez (ej. todo el buzón de feedback) — y, si hay un proveedor de correo
+ * configurado (`RESEND_API_KEY`, ver src/lib/email.ts), manda el correo de cada una con un botón
+ * directo al dashboard. El envío del correo nunca bloquea ni tira la petición que lo originó.
+ */
+async function pushNotifications(
+  recipients: string[],
+  base: { type: NotificationType; title: string; body: string; link: string; meta?: string },
+) {
+  if (recipients.length === 0) return;
+  const entries = await loadNotifications();
+  const created = recipients.map(email => buildNotification({ ...base, email }));
+  await saveNotifications([...entries, ...created]);
+  const appOrigin = process.env.APP_ORIGIN || '';
+  for (const entry of created) {
+    sendNotificationEmail({
+      to: entry.email,
+      subject: entry.title,
+      heading: entry.title,
+      body: entry.body,
+      button: { label: 'Ver en Pulso Toroto', url: `${appOrigin}/${entry.link}` },
+    }).catch(() => {});
+  }
 }
 
 // --- Tokens personales de API: permiten que una persona conecte su propio Claude/herramienta a
@@ -651,6 +718,17 @@ export async function createApp() {
         replies: [],
       });
       await saveFeedback(entries);
+
+      // Avisa al buzón (Karla, Samantha, Angie) de que hay feedback nuevo — salvo a quien lo
+      // mandó, si es parte del buzón.
+      const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+      pushNotifications(FEEDBACK_INBOX_EMAILS.filter(e => e !== session.email), {
+        type: 'feedback_new',
+        title: 'Nuevo feedback en Pulso',
+        body: `${session.name} dejó este feedback: "${preview}"`,
+        link: '#/feedback',
+      }).catch(() => {});
+
       res.status(201).json({ ok: true });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible guardar el feedback.' });
@@ -726,6 +804,51 @@ export async function createApp() {
       res.json({ ok: true });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible eliminar el feedback.' });
+    }
+  });
+
+  app.get('/api/notifications', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const entries = await loadNotifications();
+      const mine = notificationsFor(entries, session.email);
+      res.json({ notifications: mine, unreadCount: mine.filter(n => !n.readAt).length });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible cargar las notificaciones.' });
+    }
+  });
+
+  app.post('/api/notifications/:id/read', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const id = clean(req.params.id, 100);
+      const entries = await loadNotifications();
+      const entry = entries.find(n => n.id === id && n.email === session.email.toLowerCase());
+      if (!entry) return res.status(404).json({ error: 'Notificación no encontrada.' });
+      entry.readAt = entry.readAt || new Date().toISOString();
+      await saveNotifications(entries);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible actualizar la notificación.' });
+    }
+  });
+
+  app.post('/api/notifications/read-all', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    try {
+      const entries = await loadNotifications();
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const n of entries) {
+        if (n.email === session.email.toLowerCase() && !n.readAt) {
+          n.readAt = now;
+          changed = true;
+        }
+      }
+      if (changed) await saveNotifications(entries);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'No fue posible actualizar las notificaciones.' });
     }
   });
 
