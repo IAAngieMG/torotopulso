@@ -44,7 +44,7 @@ test('isPersonOff es true durante un período "En off" y false fuera de rango', 
   assert.equal(isPersonOff('octabio@toroto.mx', new Date('2026-10-27T15:00:00.000Z')), false);
   assert.ok(isPersonOff('renan@toroto.mx', new Date('2026-10-28T15:00:00.000Z')));
   assert.equal(isPersonOff('renan@toroto.mx', new Date('2026-10-24T15:00:00.000Z')), false);
-  assert.ok(isPersonOff('karla@toroto.mx', new Date('2026-12-25T15:00:00.000Z')));
+  assert.ok(isPersonOff('karla@toroto.mx', new Date('2026-11-11T15:00:00.000Z')));
 });
 
 test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () => {
