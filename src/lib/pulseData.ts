@@ -43,6 +43,27 @@ function normalizeQCode(raw: string): string {
   return QCODE_ALIASES[raw.trim().toUpperCase()] ?? raw;
 }
 
+/**
+ * Detecta si una respuesta de "Inicio del día" (BD) es del check-in viejo por botones en vez de
+ * la pregunta nueva de escala 1-5 (desde oct 2026). Antes se usaba solo `choice !== null`, pero
+ * el Sheet real reportó (2026-10-24, luego confirmado el 2026-10-26 con una semana completa ya
+ * en el formato nuevo) que `choice` puede seguir poblado también en la pregunta nueva — no es una
+ * señal confiable por sí sola.
+ *
+ * La señal más directa es el texto real de la pregunta que se envió (`question`, columna del
+ * Sheet con el mensaje tal cual se mandó por Buk ese día): la pregunta nueva siempre enumera sus
+ * opciones como "1 = ... 2 = ... 5 = ...", algo que el check-in viejo por botones nunca trae. Si
+ * `question` no está disponible (vacío), se cae de vuelta a `choice` para no perder la detección
+ * que ya funcionaba en datos sin ese texto.
+ */
+const LIKERT_SCALE_PATTERN = /[1-5]\s*=/;
+
+export function isLegacyBdCheckin(r: ResponseRecord): boolean {
+  if (r.qCode !== 'BD' || r.choice === null) return false;
+  if (r.question) return !LIKERT_SCALE_PATTERN.test(r.question);
+  return true;
+}
+
 /** Parses `Respuestas`. */
 export function parseRespuestas(rows: string[][]): ResponseRecord[] {
   return rows

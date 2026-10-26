@@ -1,4 +1,4 @@
-import type { ResponseRecord } from './pulseData.ts';
+import { isLegacyBdCheckin, type ResponseRecord } from './pulseData.ts';
 import { rangeWindow } from './scoring.ts';
 import { activeVacation } from './vacations.ts';
 
@@ -22,8 +22,8 @@ import { activeVacation } from './vacations.ts';
  *    saltó ese slot puntual.
  *  - Calificación baja: "Cierre del día" (BT) por debajo de 3/5, y desde oct 2026 también
  *    "Inicio del día" (BD) cuando es una respuesta del formato nuevo de escala 1-5 (el check-in
- *    viejo por botones, identificado por traer `choice` poblado, nunca cuenta aquí aunque también
- *    traiga `rawScore`) — "Alimentos" nunca genera esta flag, sin importar su calificación.
+ *    viejo por botones, excluido vía `isLegacyBdCheckin`, nunca cuenta aquí) — "Alimentos" nunca
+ *    genera esta flag, sin importar su calificación.
  *
  * Los días hábiles en los que la persona estaba de vacaciones, maternidad o "en off" (sin
  * mensajes de Pulso; src/lib/vacations.ts, alcance "all") no cuentan para ningún patrón (ni como
@@ -180,16 +180,15 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
 
   // Calificaciones que pueden marcar baja de ánimo: "Cierre del día" (BT) y, desde oct 2026 que
   // "Inicio del día" (BD) pasó a la misma escala 1-5 (ver scoring.ts `moodAverage`), también BD
-  // cuando es una respuesta del formato nuevo. El check-in viejo por botones de BD se distingue
-  // por `choice` (siempre poblado ahí, nunca en la pregunta nueva de escala 1-5) y no por
-  // `rawScore`: el Sheet real también puebla `rawScore` en el check-in viejo (reflejando el botón
-  // elegido, 1 o 2), así que filtrar solo por `rawScore !== null` marcaba calificación baja falsa
-  // en semanas enteramente del formato viejo (bug reportado 2026-10-19). "Alimentos" solo mide
-  // participación (ya cubierto por "missing_response") y nunca entra.
+  // cuando es una respuesta del formato nuevo. El check-in viejo por botones de BD se excluye vía
+  // `isLegacyBdCheckin` (pulseData.ts): ni `choice` ni `rawScore` poblados son por sí solos una
+  // señal confiable de formato viejo en el Sheet real — ambos aparecen también en la pregunta
+  // nueva (bugs reportados 2026-10-19 y 2026-10-26). "Alimentos" solo mide participación (ya
+  // cubierto por "missing_response") y nunca entra.
   const lowScoreRecords = [...recent]
     .filter(
       r =>
-        (r.qCode === 'BT' || (r.qCode === 'BD' && r.choice === null)) &&
+        (r.qCode === 'BT' || (r.qCode === 'BD' && !isLegacyBdCheckin(r))) &&
         r.rawScore !== null &&
         (r.rawScore as number) < LOW_SCORE_THRESHOLD,
     )
@@ -242,9 +241,9 @@ export function buildFlagContext(records: ResponseRecord[], now = new Date()): R
   const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;
 
   // Mismo criterio que la flag de "Calificación baja": BT siempre, BD solo cuando es del formato
-  // nuevo (`choice === null` — ver comentario arriba sobre por qué no basta con `rawScore`).
+  // nuevo (`isLegacyBdCheckin` — ver comentario arriba sobre por qué no basta con `choice`/`rawScore`).
   const priorAvgScore = average(
-    prior.filter(r => (r.qCode === 'BT' || (r.qCode === 'BD' && r.choice === null)) && r.rawScore !== null).map(r => r.rawScore as number),
+    prior.filter(r => (r.qCode === 'BT' || (r.qCode === 'BD' && !isLegacyBdCheckin(r))) && r.rawScore !== null).map(r => r.rawScore as number),
   );
 
   const priorBD = prior.filter(r => r.qCode === 'BD');

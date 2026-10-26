@@ -168,6 +168,17 @@ test('"Inicio del día" (BD) en la escala 1-5 (desde oct 2026) sí genera red fl
   assert.match(flag!.message, /Inicio del día/);
 });
 
+test('"Inicio del día" (BD) en la escala 1-5 SÍ genera red flag aunque traiga choice poblado, cuando el texto de la pregunta es la escala nueva (bug 2026-10-26)', () => {
+  const newFormatQuestion = '¿Cómo inicias tu día? 1 = 💀 Con sueño de ultratumba · 2 = 🧟 Como zombi · 3 = 👻 Ahí la llevo · 4 = 🎃 Con buena vibra · 5 = 🧹 ¡Con energía de escoba voladora!';
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day =>
+    record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1, choice: 1, question: newFormatQuestion }),
+  );
+  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
+  const flag = flags.find(f => f.type === 'low_score');
+  assert.ok(flag, JSON.stringify(flags));
+  assert.match(flag!.message, /Inicio del día/);
+});
+
 test('una calificación de 4 o más en Cierre del día no genera red flag', () => {
   const flags = computeRedFlagsForPerson(
     EMAIL,

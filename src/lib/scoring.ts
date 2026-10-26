@@ -1,4 +1,4 @@
-import { isFridaySignal, type ResponseRecord } from './pulseData.ts';
+import { isFridaySignal, isLegacyBdCheckin, type ResponseRecord } from './pulseData.ts';
 
 const DAY_MS = 86400000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -71,15 +71,12 @@ function average(values: number[]): number | null {
 // y `score` que ya viene doblado a una escala 0-10 para otros usos. El dashboard muestra
 // "X/5", así que aquí siempre promediamos `rawScore`.
 //
-// El check-in viejo de botones de "Inicio del día" SÍ puede traer `rawScore` poblado en el Sheet
-// real (reflejando el índice del botón, 1 o 2 — no una calificación), aunque en nuestros datos de
-// prueba originalmente lo simulamos como `null`. El campo que de verdad distingue el formato
-// viejo es `choice` (el botón elegido): el check-in viejo siempre lo trae, la pregunta nueva de
-// escala 1-5 nunca lo usa. Por eso excluimos aquí cualquier BD con `choice` poblado, sin importar
-// si también trae `rawScore` — si no, un check-in viejo mayormente "1" (botón "Ya registré mi
-// entrada") se promedia como una calificación baja falsa (ver bug reportado 2026-10-19).
+// El check-in viejo de botones de "Inicio del día" se excluye vía `isLegacyBdCheckin` (ver
+// pulseData.ts): ni `rawScore` ni `choice` poblados son, por sí solos, una señal confiable de
+// formato viejo en el Sheet real — ambos también aparecen en la pregunta nueva de escala 1-5
+// (ver bugs reportados 2026-10-19 y 2026-10-26).
 function scores(records: ResponseRecord[], qCode: string): number[] {
-  return records.filter(r => r.qCode === qCode && r.rawScore !== null && !(r.qCode === 'BD' && r.choice !== null)).map(r => r.rawScore as number);
+  return records.filter(r => r.qCode === qCode && r.rawScore !== null && !isLegacyBdCheckin(r)).map(r => r.rawScore as number);
 }
 
 /** Fecha local (YYYY-MM-DD) de un timestamp, sin pasar por UTC para no recorrer un día. */
@@ -107,19 +104,19 @@ export interface OverviewKpis {
   /** Promedio 1-5 de "Inicio del día" — `null` si en el rango solo hay respuestas del check-in
    * viejo por botones (ver `bdOnTimePct`) o no hubo respuestas. Desde que la pregunta de Inicio
    * del día pasó a la misma escala 1-5 que Cierre del día (oct 2026), sí es una calificación real
-   * de ánimo, no solo puntualidad — ver `moodAverage`. El check-in viejo se identifica por traer
-   * `choice` poblado (no por `rawScore`: el Sheet real también puebla `rawScore` ahí, reflejando
-   * el botón elegido — ver comentario en `scores()`). */
+   * de ánimo, no solo puntualidad — ver `moodAverage`. El check-in viejo se identifica vía
+   * `isLegacyBdCheckin` (pulseData.ts) — ni `choice` ni `rawScore` poblados son por sí solos una
+   * señal confiable, ambos pueden venir poblados también en la pregunta nueva. */
   bdAverage: number | null;
   btAverage: number | null;
   /** Promedio combinado de las dos preguntas que miden ánimo con escala 1-5 (Inicio y Cierre del
    * día) — las dos "la misma medida", por eso se promedian juntas en vez de preferir una sola.
-   * El check-in viejo por botones de Inicio del día (`choice` poblado) nunca entra aquí. `null`
+   * El check-in viejo por botones de Inicio del día (`isLegacyBdCheckin`) nunca entra aquí. `null`
    * si ninguna de las dos tiene respuestas calificadas en el rango. */
   moodAverage: number | null;
   /** Promedio de respuestas con calificación en el rango (incluye Inicio del día ya que ahora es
-   * una calificación real, salvo cuando viene por el check-in viejo de botones — identificado por
-   * `choice` poblado, no por ausencia de `rawScore` — que queda fuera). */
+   * una calificación real, salvo cuando viene por el check-in viejo de botones —
+   * `isLegacyBdCheckin` — que queda fuera). */
   overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
@@ -168,7 +165,7 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     btAverage: average(scores(records, 'BT')),
     moodAverage: average([...scores(records, 'BD'), ...scores(records, 'BT')]),
     overallAverage: average(
-      records.filter(r => r.rawScore !== null && !(r.qCode === 'BD' && r.choice !== null)).map(r => r.rawScore as number),
+      records.filter(r => r.rawScore !== null && !isLegacyBdCheckin(r)).map(r => r.rawScore as number),
     ),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
@@ -268,10 +265,11 @@ function localMinutesOfDay(iso: string, tz = MEXICO_TZ): number {
 
 /**
  * Lectura del check-in de entrada (slot BD) cuando viene por botones ("Ya registré mi entrada" /
- * "La registro ahora, por la tarde") en vez de una calificación 1-5 — se detecta por `choice`
- * poblado (el Sheet real también puebla `rawScore` en este formato, reflejando el botón elegido,
- * así que `choice` y no `rawScore` es la señal confiable — ver `scores()`). `null` si esta semana
- * el BD no es de este formato (sin respuestas con `choice`).
+ * "La registro ahora, por la tarde") en vez de una calificación 1-5 — se detecta vía
+ * `isLegacyBdCheckin` (pulseData.ts), que usa el texto real de la pregunta enviada cuando está
+ * disponible, en vez de `choice`/`rawScore` solos (ambos pueden venir poblados también en la
+ * pregunta nueva — ver bugs reportados 2026-10-19 y 2026-10-26). `null` si esta semana el BD no
+ * es de este formato.
  */
 export interface EntradaInsight {
   onTimePct: number; // % de respuestas BD entre 9:00 y 9:30 am hora CDMX
@@ -281,7 +279,7 @@ export interface EntradaInsight {
 }
 
 export function computeEntradaInsight(records: ResponseRecord[]): EntradaInsight | null {
-  const entradas = records.filter(r => r.qCode === 'BD' && r.choice !== null);
+  const entradas = records.filter(r => isLegacyBdCheckin(r));
   if (entradas.length === 0) return null;
   const onTime = entradas.filter(r => {
     const mins = localMinutesOfDay(r.timestamp);
