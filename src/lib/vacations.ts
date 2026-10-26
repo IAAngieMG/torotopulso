@@ -32,6 +32,7 @@ export const VACATIONS: VacationPeriod[] = [
   { email: 'karen@toroto.mx', from: '2026-11-13', until: '2026-11-20', scope: 'all', reason: 'En off' },
   { email: 'guillermina@toroto.mx', from: '2026-11-16', until: '2026-11-19', scope: 'all', reason: 'En off' },
   { email: 'karla@toroto.mx', from: '2026-11-09', until: '2026-11-13', scope: 'all', reason: 'En off' },
+  { email: 'karla@toroto.mx', from: '2026-12-21', until: '2026-12-31', scope: 'all', reason: 'De vacaciones' },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();

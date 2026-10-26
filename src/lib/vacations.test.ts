@@ -47,6 +47,14 @@ test('isPersonOff es true durante un período "En off" y false fuera de rango', 
   assert.ok(isPersonOff('karla@toroto.mx', new Date('2026-11-11T15:00:00.000Z')));
 });
 
+test('Karla además tiene vacaciones normales del 21 al 31 de diciembre, aparte de su "En off" de noviembre', () => {
+  assert.equal(isPersonOff('karla@toroto.mx', new Date('2026-11-20T15:00:00.000Z')), false);
+  const active = activeVacation('karla@toroto.mx', new Date('2026-12-25T15:00:00.000Z'));
+  assert.ok(active);
+  assert.equal(active!.reason, 'De vacaciones');
+  assert.match(vacationLabel(active!), /vacaciones/i);
+});
+
 test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () => {
   const now = new Date('2026-10-09T15:00:00.000Z');
   const active = activeVacation('ane@toroto.mx', now);
