@@ -58,10 +58,10 @@ test('computeKpis con arreglo vacío no truena y regresa null', () => {
   assert.equal(kpis.bdOnTimeDetail, null);
 });
 
-test('computeKpis calcula bdOnTimePct/bdOnTimeDetail del check-in por botones de "Inicio del día"', () => {
+test('computeKpis calcula bdOnTimePct/bdOnTimeDetail del recordatorio de check-in de Buk (BUK-E)', () => {
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }), // 09:05 CDMX, a tiempo
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }), // 13:00 CDMX, tarde
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }), // 09:05 CDMX, a tiempo
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T19:00:00.000Z' }), // 13:00 CDMX, tarde
   ];
   const kpis = computeKpis(records, 2);
   assert.equal(kpis.bdOnTimePct, 50);
@@ -89,22 +89,17 @@ test('overallAverage incluye el rawScore de BD cuando viene en la escala 1-5 (de
   assert.equal(kpis.moodAverage, 3);
 });
 
-test('overallAverage ignora respuestas sin calificación (rawScore null, como un BD de botones)', () => {
-  const records = [rec({ qCode: 'BD', rawScore: null, choice: 1 })];
+test('overallAverage ignora respuestas sin calificación (rawScore null)', () => {
+  const records = [rec({ qCode: 'AL', rawScore: null, choice: 1 })];
   const kpis = computeKpis(records, 1);
   assert.equal(kpis.overallAverage, null);
 });
 
-test('bdAverage/moodAverage/overallAverage ignoran el check-in viejo de BD aunque el Sheet real también traiga rawScore poblado ahí (bug 2026-10-19)', () => {
-  // En producción el check-in viejo de botones de "Inicio del día" también puebla `rawScore`
-  // (reflejando el índice del botón, 1 o 2) y no solo `null` como se asumía — por eso la señal
-  // confiable de "formato viejo" es `choice` poblado, nunca `rawScore`. Sin este filtro, una
-  // semana enteramente de check-in viejo (mayormente botón "Ya registré mi entrada", rawScore 1)
-  // promediaba como una calificación baja falsa de ~1/5 en vez de no contar en absoluto.
+test('bdAverage/moodAverage/overallAverage ignoran BUK-E (recordatorio de check-in de Buk, no una calificación) aunque traiga rawScore poblado (bug 2026-10-19/26: BUK-E y BD son encuestas distintas, no formatos viejo/nuevo de la misma pregunta)', () => {
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),
-    rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'b@toroto.mx' }),
-    rec({ qCode: 'BD', choice: 2, rawScore: 2, email: 'c@toroto.mx' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, email: 'b@toroto.mx' }),
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, email: 'c@toroto.mx' }),
     rec({ qCode: 'BT', rawScore: 4, email: 'a@toroto.mx' }),
   ];
   const kpis = computeKpis(records, 3);
@@ -113,27 +108,15 @@ test('bdAverage/moodAverage/overallAverage ignoran el check-in viejo de BD aunqu
   assert.equal(kpis.overallAverage, 4);
 });
 
-test('bdAverage SÍ cuenta BD del formato nuevo aunque traiga choice poblado, cuando el texto de la pregunta enviada es la escala 1-5 (bug 2026-10-26)', () => {
-  // Una semana completa después del cambio de formato (19-25 oct) siguió mostrando el % de Buk
-  // en vez de la escala 1-5 — resultó que el Sheet real también puebla `choice` en la pregunta
-  // nueva (no solo en el check-in viejo, como se asumió al corregir el bug anterior). La señal
-  // confiable es el texto real de la pregunta enviada (`question`): la pregunta nueva siempre
-  // enumera sus opciones como "1 = ... 5 = ...", el check-in viejo nunca lo hace.
-  const newFormatQuestion = '¡Boo-enos días! 👻 Recuerda hacer tu check-in de entrada en Buk. ¿Cómo inicias tu día? 1 = 💀 Con sueño de ultratumba · 2 = 🧟 Como zombi · 3 = 👻 Ahí la llevo · 4 = 🎃 Con buena vibra · 5 = 🧹 ¡Con energía de escoba voladora!';
+test('bdAverage cuenta BD en escala 1-5 normalmente, sin importar que BUK-E (otra encuesta) también haya llegado esa semana', () => {
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: 1, question: newFormatQuestion, email: 'a@toroto.mx' }),
-    rec({ qCode: 'BD', choice: 5, rawScore: 5, question: newFormatQuestion, email: 'b@toroto.mx' }),
+    rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'BD', choice: 5, rawScore: 5, email: 'b@toroto.mx' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),
   ];
   const kpis = computeKpis(records, 2);
   assert.equal(kpis.bdAverage, 3);
   assert.equal(kpis.moodAverage, 3);
-});
-
-test('bdOnTimePct sigue leyendo el check-in viejo normalmente cuando question está vacío (sin texto para distinguir, se cae de vuelta a choice)', () => {
-  const records = [rec({ qCode: 'BD', choice: 1, rawScore: null, question: '', timestamp: '2026-10-06T15:05:00.000Z' })];
-  const kpis = computeKpis(records, 1);
-  assert.equal(kpis.bdOnTimePct, 100);
-  assert.equal(kpis.bdAverage, null);
 });
 
 test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
@@ -142,20 +125,20 @@ test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
   assert.deepEqual(points.map(p => p.day), ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
 });
 
-test('computeWeeklySeries calcula bdOnTimePct por día a partir del check-in por botones (no una calificación 1-5)', () => {
+test('computeWeeklySeries calcula bdOnTimePct por día a partir del recordatorio de check-in de Buk (BUK-E, no una calificación 1-5)', () => {
   const now = new Date('2026-10-09T12:00:00'); // viernes 9 de octubre de 2026
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }), // martes, 09:05 CDMX, a tiempo
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-07T19:00:00.000Z' }), // miércoles, 13:00 CDMX, tarde
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }), // martes, 09:05 CDMX, a tiempo
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-07T19:00:00.000Z' }), // miércoles, 13:00 CDMX, tarde
   ];
   const points = computeWeeklySeries(records, now, 'week');
   const tuesday = points.find(p => p.day === 'Martes');
   const wednesday = points.find(p => p.day === 'Miércoles');
   const thursday = points.find(p => p.day === 'Jueves');
   assert.equal(tuesday?.bdOnTimePct, 100);
-  assert.equal(tuesday?.bd, null, 'BD por botones no tiene calificación 1-5');
+  assert.equal(tuesday?.bd, null, 'BUK-E no tiene calificación 1-5');
   assert.equal(wednesday?.bdOnTimePct, 0);
-  assert.equal(thursday?.bdOnTimePct, null, 'sin respuestas BD ese día');
+  assert.equal(thursday?.bdOnTimePct, null, 'sin respuestas BUK-E ese día');
 });
 
 test('computeEnergyDistribution reparte por el choice de AL', () => {
@@ -252,9 +235,9 @@ test('kpisForPersonInRange filtra por email y por señal', () => {
 
 test('computeEntradaInsight detecta entrada a tiempo (9:00-9:30 CDMX) y el botón elegido', () => {
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }), // 09:05 CDMX, a tiempo
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T15:30:00.000Z' }), // 09:30 CDMX, a tiempo (límite)
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }), // 13:00 CDMX, tarde
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }), // 09:05 CDMX, a tiempo
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T15:30:00.000Z' }), // 09:30 CDMX, a tiempo (límite)
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T19:00:00.000Z' }), // 13:00 CDMX, tarde
   ];
   const entrada = computeEntradaInsight(records);
   assert.ok(entrada);
@@ -264,8 +247,8 @@ test('computeEntradaInsight detecta entrada a tiempo (9:00-9:30 CDMX) y el botó
   assert.equal(entrada?.laRegistroAhoraCount, 2);
 });
 
-test('computeEntradaInsight regresa null cuando BD no trae choice (semanas con calificación 1-5)', () => {
-  assert.equal(computeEntradaInsight([rec({ qCode: 'BD', choice: null, rawScore: 4 })]), null);
+test('computeEntradaInsight regresa null cuando no hay respuestas BUK-E (BD, aunque traiga choice, es otra encuesta)', () => {
+  assert.equal(computeEntradaInsight([rec({ qCode: 'BD', choice: 3, rawScore: 4 })]), null);
 });
 
 test('computeChoiceBreakdown reparte por choice y ordena de mayor a menor', () => {
@@ -280,8 +263,8 @@ test('computeChoiceBreakdown reparte por choice y ordena de mayor a menor', () =
   assert.equal(breakdown.length, 3);
 });
 
-test('buildAutoInsight basa el clima solo en bdOnTimePct/puntualidad cuando BD es de botones (sin rawScore)', () => {
-  // El check-in viejo por botones (sin rawScore) nunca entra en moodAverage ni en el clima — solo
+test('buildAutoInsight basa el clima solo en bdOnTimePct/puntualidad cuando solo hubo BUK-E (sin BD)', () => {
+  // BUK-E (recordatorio de check-in de Buk) nunca entra en moodAverage ni en el clima — solo
   // Cierre del día cuenta en este caso.
   const kpis = {
     bdAverage: null,
@@ -295,8 +278,8 @@ test('buildAutoInsight basa el clima solo en bdOnTimePct/puntualidad cuando BD e
     bdOnTimeDetail: '1 registraron su entrada · 1 avisaron que la registrarían después',
   };
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T19:00:00.000Z' }),
   ];
   const insight = buildAutoInsight(kpis, [], 'la tropa', records);
   assert.match(insight.headline, /estable y positivo/);
@@ -355,7 +338,7 @@ test('buildAutoInsight omite "avisó que la registraría más tarde" cuando el 1
     bdOnTimeDetail: '5 registraron su entrada · 0 avisaron que la registrarían después',
   };
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }),
     rec({ qCode: 'BT', rawScore: 4 }),
   ];
   const insight = buildAutoInsight(kpis, [], 'Juan', records, true);
@@ -378,8 +361,8 @@ test('buildAutoInsight incluye la cláusula de aviso cuando hay un reparto real 
     bdOnTimeDetail: '1 registraron su entrada · 1 avisaron que la registrarían después',
   };
   const records = [
-    rec({ qCode: 'BD', choice: 1, rawScore: null, timestamp: '2026-10-06T15:05:00.000Z' }),
-    rec({ qCode: 'BD', choice: 2, rawScore: null, timestamp: '2026-10-06T19:00:00.000Z' }),
+    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }),
+    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T19:00:00.000Z' }),
   ];
   const insight = buildAutoInsight(kpis, [], 'la tropa', records);
   const entradaBullet = insight.bullets.find(b => b.includes('registró su entrada a tiempo'));

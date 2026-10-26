@@ -1,4 +1,4 @@
-import { isFridaySignal, isLegacyBdCheckin, type ResponseRecord } from './pulseData.ts';
+import { isFridaySignal, type ResponseRecord } from './pulseData.ts';
 
 const DAY_MS = 86400000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -71,12 +71,10 @@ function average(values: number[]): number | null {
 // y `score` que ya viene doblado a una escala 0-10 para otros usos. El dashboard muestra
 // "X/5", así que aquí siempre promediamos `rawScore`.
 //
-// El check-in viejo de botones de "Inicio del día" se excluye vía `isLegacyBdCheckin` (ver
-// pulseData.ts): ni `rawScore` ni `choice` poblados son, por sí solos, una señal confiable de
-// formato viejo en el Sheet real — ambos también aparecen en la pregunta nueva de escala 1-5
-// (ver bugs reportados 2026-10-19 y 2026-10-26).
+// "BUK-E" (recordatorio de check-in de entrada en Buk) es un qCode propio, distinto de "BD" —
+// ver pulseData.ts — así que nunca entra aquí cuando se pide `qCode === 'BD'`.
 function scores(records: ResponseRecord[], qCode: string): number[] {
-  return records.filter(r => r.qCode === qCode && r.rawScore !== null && !isLegacyBdCheckin(r)).map(r => r.rawScore as number);
+  return records.filter(r => r.qCode === qCode && r.rawScore !== null).map(r => r.rawScore as number);
 }
 
 /** Fecha local (YYYY-MM-DD) de un timestamp, sin pasar por UTC para no recorrer un día. */
@@ -101,31 +99,24 @@ function onTimeRate(records: ResponseRecord[]): number | null {
 }
 
 export interface OverviewKpis {
-  /** Promedio 1-5 de "Inicio del día" — `null` si en el rango solo hay respuestas del check-in
-   * viejo por botones (ver `bdOnTimePct`) o no hubo respuestas. Desde que la pregunta de Inicio
-   * del día pasó a la misma escala 1-5 que Cierre del día (oct 2026), sí es una calificación real
-   * de ánimo, no solo puntualidad — ver `moodAverage`. El check-in viejo se identifica vía
-   * `isLegacyBdCheckin` (pulseData.ts) — ni `choice` ni `rawScore` poblados son por sí solos una
-   * señal confiable, ambos pueden venir poblados también en la pregunta nueva. */
+  /** Promedio 1-5 de "Inicio del día" (qCode "BD") — `null` si no hubo respuestas en el rango.
+   * Es una encuesta de calificación de ánimo, separada del recordatorio de check-in de Buk
+   * ("BUK-E", ver `bdOnTimePct`) — ver `moodAverage`. */
   bdAverage: number | null;
   btAverage: number | null;
   /** Promedio combinado de las dos preguntas que miden ánimo con escala 1-5 (Inicio y Cierre del
    * día) — las dos "la misma medida", por eso se promedian juntas en vez de preferir una sola.
-   * El check-in viejo por botones de Inicio del día (`isLegacyBdCheckin`) nunca entra aquí. `null`
-   * si ninguna de las dos tiene respuestas calificadas en el rango. */
+   * `null` si ninguna de las dos tiene respuestas calificadas en el rango. */
   moodAverage: number | null;
-  /** Promedio de respuestas con calificación en el rango (incluye Inicio del día ya que ahora es
-   * una calificación real, salvo cuando viene por el check-in viejo de botones —
-   * `isLegacyBdCheckin` — que queda fuera). */
+  /** Promedio de todas las respuestas con calificación (`rawScore`) en el rango. */
   overallAverage: number | null;
   participationPct: number | null;
   participationDetail: string;
   onTimePct: number | null;
-  /** % de respuestas de "Inicio del día" POR EL CHECK-IN VIEJO de botones que llegaron a tiempo
-   * (9:00-9:30 am CDMX) — `null` si no hubo respuestas BD de ese formato viejo en el rango. Solo
-   * aplica a datos históricos anteriores al cambio a escala 1-5 (ver `bdAverage`). */
+  /** % de respuestas del recordatorio de check-in de Buk ("BUK-E") que llegaron a tiempo
+   * (9:00-9:30 am CDMX) — `null` si no hubo respuestas BUK-E en el rango. */
   bdOnTimePct: number | null;
-  /** Reparto de los dos botones del check-in viejo ("Ya registré mi entrada" / "La registro ahora,
+  /** Reparto de los dos botones del check-in de Buk ("Ya registré mi entrada" / "La registro ahora,
    * por la tarde"), ej. "3 registraron su entrada · 1 avisó que la registraría después" — `null`
    * junto con `bdOnTimePct`. Siempre en pasado (es el resultado ya dado, no necesariamente "ahora"). */
   bdOnTimeDetail: string | null;
@@ -165,7 +156,7 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     btAverage: average(scores(records, 'BT')),
     moodAverage: average([...scores(records, 'BD'), ...scores(records, 'BT')]),
     overallAverage: average(
-      records.filter(r => r.rawScore !== null && !isLegacyBdCheckin(r)).map(r => r.rawScore as number),
+      records.filter(r => r.rawScore !== null && r.qCode !== 'BUK-E').map(r => r.rawScore as number),
     ),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,
@@ -179,12 +170,11 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
 
 export interface DailyPoint {
   day: string;
-  /** Promedio 1-5 de "Inicio del día" ese día/semana — `null` si solo hubo respuestas del check-in
-   * viejo por botones (ver `bdOnTimePct`) o no hubo respuestas. */
+  /** Promedio 1-5 de "Inicio del día" ese día/semana — `null` si no hubo respuestas. */
   bd: number | null;
   bt: number | null;
-  /** % de respuestas de "Inicio del día" POR EL CHECK-IN VIEJO de botones que llegaron a tiempo
-   * (9:00-9:30 am CDMX) — `null` si ese día/semana no hubo respuestas BD de ese formato viejo. */
+  /** % de respuestas del recordatorio de check-in de Buk ("BUK-E") que llegaron a tiempo
+   * (9:00-9:30 am CDMX) — `null` si ese día/semana no hubo respuestas BUK-E. */
   bdOnTimePct: number | null;
 }
 
@@ -264,22 +254,20 @@ function localMinutesOfDay(iso: string, tz = MEXICO_TZ): number {
 }
 
 /**
- * Lectura del check-in de entrada (slot BD) cuando viene por botones ("Ya registré mi entrada" /
- * "La registro ahora, por la tarde") en vez de una calificación 1-5 — se detecta vía
- * `isLegacyBdCheckin` (pulseData.ts), que usa el texto real de la pregunta enviada cuando está
- * disponible, en vez de `choice`/`rawScore` solos (ambos pueden venir poblados también en la
- * pregunta nueva — ver bugs reportados 2026-10-19 y 2026-10-26). `null` si esta semana el BD no
- * es de este formato.
+ * Lectura del recordatorio de check-in de entrada en Buk (qCode "BUK-E") — un botón ("Ya
+ * registré mi entrada" / "La registro ahora, por la tarde"), no una calificación. Es una
+ * encuesta separada de "Inicio del día" (BD, ver `bdAverage`), no un formato viejo de la misma
+ * pregunta — ver pulseData.ts. `null` si no hubo respuestas BUK-E en el rango.
  */
 export interface EntradaInsight {
-  onTimePct: number; // % de respuestas BD entre 9:00 y 9:30 am hora CDMX
+  onTimePct: number; // % de respuestas BUK-E entre 9:00 y 9:30 am hora CDMX
   yaRegistreCount: number;
   laRegistroAhoraCount: number;
   total: number;
 }
 
 export function computeEntradaInsight(records: ResponseRecord[]): EntradaInsight | null {
-  const entradas = records.filter(r => isLegacyBdCheckin(r));
+  const entradas = records.filter(r => r.qCode === 'BUK-E');
   if (entradas.length === 0) return null;
   const onTime = entradas.filter(r => {
     const mins = localMinutesOfDay(r.timestamp);
@@ -338,9 +326,9 @@ export function buildAutoInsight(
   const worstMoodDay = withMood.length ? withMood.reduce((a, b) => (dayMood(b) < dayMood(a) ? b : a)) : null;
 
   // Lo único que refleja cómo se sintió la persona/equipo es una calificación 1-5: "Cierre del
-  // día" (BT) y, desde que pasó a la misma escala (oct 2026), "Inicio del día" (BD) también —
-  // "Alimentos" (participación) sigue siendo un indicador aparte que nunca mueve la calificación
-  // general. El check-in viejo de botones (sin `rawScore`) no cuenta aquí (ver `bdOnTimePct`).
+  // día" (BT) e "Inicio del día" (BD) — "Alimentos" (participación) sigue siendo un indicador
+  // aparte que nunca mueve la calificación general. El check-in de Buk (BUK-E) no cuenta aquí,
+  // es puntualidad, no ánimo (ver `bdOnTimePct`).
   const climate =
     kpis.moodAverage == null ? null : kpis.moodAverage >= 4 ? 'estable y positivo' : kpis.moodAverage >= 3 ? 'estable' : 'con oportunidad de mejora';
   const capitalizedScope = scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1);

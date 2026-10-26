@@ -1,29 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRespuestas, parsePreguntas, currentQuestionFor, isLegacyBdCheckin } from './pulseData.ts';
-import type { ResponseRecord } from './pulseData.ts';
-
-function bdRecord(overrides: Partial<ResponseRecord>): ResponseRecord {
-  return {
-    timestamp: '2026-10-20T15:00:00.000Z',
-    responseKey: 'k',
-    surveyName: 'Buk',
-    qCode: 'BD',
-    question: '',
-    respondentName: 'Persona',
-    email: 'persona@toroto.mx',
-    slackUserId: '',
-    groups: '',
-    roles: '',
-    rawScore: null,
-    score: null,
-    sentiment: '',
-    choice: null,
-    scheduledDate: '',
-    scheduledTime: '',
-    ...overrides,
-  };
-}
+import { parseRespuestas, parsePreguntas, currentQuestionFor } from './pulseData.ts';
 
 test('parseRespuestas castea scores numéricos y deja email en minúsculas', () => {
   const rows = [
@@ -37,15 +14,18 @@ test('parseRespuestas castea scores numéricos y deja email en minúsculas', () 
   assert.equal(parsed[0].choice, 2);
 });
 
-test('parseRespuestas normaliza el qCode "BUK-E" del check-in de entrada a "BD"', () => {
+test('parseRespuestas mantiene "BUK-E" (check-in de entrada en Buk) como su propio qCode, distinto de "BD" (Inicio del día), normalizando solo mayúsculas/minúsculas', () => {
+  // BUK-E y BD son dos encuestas concurrentes y genuinamente distintas, no formatos viejo/nuevo
+  // de la misma pregunta — ver pulseData.ts. Mezclarlas (como hacía un alias previo) rompía toda
+  // detección de "cuál es cuál" río abajo.
   const rows = [
     ['timestamps', 'responseKey', 'surveyName', 'qCode', 'question', 'respondentName', 'email', 'slackUserId', 'groups', 'roles', 'rawScore', 'score', 'sentiment', 'choice', 'scheduledDate', 'scheduledTime'],
     ['2026-10-06T15:05:00.000Z', 'k', 'Buk', 'BUK-E', '¿Ya registraste tu entrada en Buk?', 'Andrea', 'andrea@toroto.mx', '', '', '', '', '', '', '1', '2026-10-06', ''],
     ['2026-10-06T15:05:00.000Z', 'k2', 'Buk', 'buk-e', 'q', 'Andrea', 'andrea@toroto.mx', '', '', '', '', '', '', '1', '2026-10-06', ''],
   ];
   const parsed = parseRespuestas(rows);
-  assert.equal(parsed[0].qCode, 'BD');
-  assert.equal(parsed[1].qCode, 'BD', 'el alias no debe ser sensible a mayúsculas/minúsculas');
+  assert.equal(parsed[0].qCode, 'BUK-E');
+  assert.equal(parsed[1].qCode, 'BUK-E', 'el qCode se normaliza a mayúsculas, sin importar cómo venga en el Sheet');
 });
 
 test('currentQuestionFor rota el pool de Viernes y respeta el mes para BD/AL/BT', () => {
@@ -59,27 +39,6 @@ test('currentQuestionFor rota el pool de Viernes y respeta el mes para BD/AL/BT'
   assert.equal(currentQuestionFor(templates, 'BD', new Date('2026-10-15')), 'Pregunta BD octubre (halloween)');
   const viernesAnswer = currentQuestionFor(templates, 'VIERNES', new Date('2026-09-04'));
   assert.ok(['Pregunta viernes A', 'Pregunta viernes B'].includes(viernesAnswer));
-});
-
-test('isLegacyBdCheckin: sin choice nunca es el check-in viejo', () => {
-  assert.equal(isLegacyBdCheckin(bdRecord({ choice: null, rawScore: 4 })), false);
-});
-
-test('isLegacyBdCheckin: con choice y sin texto de pregunta (vacío), se cae de vuelta al check-in viejo', () => {
-  assert.equal(isLegacyBdCheckin(bdRecord({ choice: 1, rawScore: 1, question: '' })), true);
-});
-
-test('isLegacyBdCheckin: con choice y rawScore poblados pero el texto de la pregunta es la escala nueva, NO es el check-in viejo (bug 2026-10-26)', () => {
-  const question = '¿Cómo inicias tu día? 1 = 💀 Con sueño de ultratumba · 2 = 🧟 Como zombi · 5 = 🧹 ¡Con energía de escoba voladora!';
-  assert.equal(isLegacyBdCheckin(bdRecord({ choice: 1, rawScore: 1, question })), false);
-});
-
-test('isLegacyBdCheckin: con choice y texto que no trae la enumeración 1-5, sigue siendo el check-in viejo', () => {
-  assert.equal(isLegacyBdCheckin(bdRecord({ choice: 1, rawScore: 1, question: '¿Ya registraste tu entrada en Buk?' })), true);
-});
-
-test('isLegacyBdCheckin: nunca aplica a otros qCodes', () => {
-  assert.equal(isLegacyBdCheckin(bdRecord({ qCode: 'BT', choice: 1, rawScore: 1, question: '' })), false);
 });
 
 test('parsePreguntas ignora filas sin mensaje', () => {
