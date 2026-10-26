@@ -1,4 +1,4 @@
-import { isLegacyBdCheckin, type ResponseRecord } from './pulseData.ts';
+import type { ResponseRecord } from './pulseData.ts';
 import { rangeWindow } from './scoring.ts';
 import { activeVacation } from './vacations.ts';
 
@@ -20,10 +20,10 @@ import { activeVacation } from './vacations.ts';
  *    nunca baja el ánimo — no participar es una flag informativa, no una caída de ánimo.
  *  - Cierre del día (BT) sin contestar: días en los que sí participó (respondió algo) pero se
  *    saltó ese slot puntual.
- *  - Calificación baja: "Cierre del día" (BT) por debajo de 3/5, y desde oct 2026 también
- *    "Inicio del día" (BD) cuando es una respuesta del formato nuevo de escala 1-5 (el check-in
- *    viejo por botones, excluido vía `isLegacyBdCheckin`, nunca cuenta aquí) — "Alimentos" nunca
- *    genera esta flag, sin importar su calificación.
+ *  - Calificación baja: "Cierre del día" (BT) por debajo de 3/5, y también "Inicio del día" (BD,
+ *    escala 1-5) — el recordatorio de check-in de Buk ("BUK-E") es una encuesta aparte, de un
+ *    botón, no una calificación, y nunca cuenta aquí. "Alimentos" tampoco genera esta flag, sin
+ *    importar su calificación.
  *
  * Los días hábiles en los que la persona estaba de vacaciones, maternidad o "en off" (sin
  * mensajes de Pulso; src/lib/vacations.ts, alcance "all") no cuentan para ningún patrón (ni como
@@ -178,17 +178,14 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     });
   }
 
-  // Calificaciones que pueden marcar baja de ánimo: "Cierre del día" (BT) y, desde oct 2026 que
-  // "Inicio del día" (BD) pasó a la misma escala 1-5 (ver scoring.ts `moodAverage`), también BD
-  // cuando es una respuesta del formato nuevo. El check-in viejo por botones de BD se excluye vía
-  // `isLegacyBdCheckin` (pulseData.ts): ni `choice` ni `rawScore` poblados son por sí solos una
-  // señal confiable de formato viejo en el Sheet real — ambos aparecen también en la pregunta
-  // nueva (bugs reportados 2026-10-19 y 2026-10-26). "Alimentos" solo mide participación (ya
-  // cubierto por "missing_response") y nunca entra.
+  // Calificaciones que pueden marcar baja de ánimo: "Cierre del día" (BT) e "Inicio del día"
+  // (BD), ambas en escala 1-5 (ver scoring.ts `moodAverage`). El recordatorio de check-in de Buk
+  // ("BUK-E") es una encuesta aparte y nunca entra aquí. "Alimentos" solo mide participación (ya
+  // cubierto por "missing_response") y tampoco entra.
   const lowScoreRecords = [...recent]
     .filter(
       r =>
-        (r.qCode === 'BT' || (r.qCode === 'BD' && !isLegacyBdCheckin(r))) &&
+        (r.qCode === 'BT' || r.qCode === 'BD') &&
         r.rawScore !== null &&
         (r.rawScore as number) < LOW_SCORE_THRESHOLD,
     )
@@ -240,10 +237,9 @@ export function buildFlagContext(records: ResponseRecord[], now = new Date()): R
   const priorSilentDays = priorWeekdays.filter(k => !priorDatesWithResponse.has(k)).length;
   const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;
 
-  // Mismo criterio que la flag de "Calificación baja": BT siempre, BD solo cuando es del formato
-  // nuevo (`isLegacyBdCheckin` — ver comentario arriba sobre por qué no basta con `choice`/`rawScore`).
+  // Mismo criterio que la flag de "Calificación baja": BT y BD, nunca BUK-E.
   const priorAvgScore = average(
-    prior.filter(r => (r.qCode === 'BT' || (r.qCode === 'BD' && !isLegacyBdCheckin(r))) && r.rawScore !== null).map(r => r.rawScore as number),
+    prior.filter(r => (r.qCode === 'BT' || r.qCode === 'BD') && r.rawScore !== null).map(r => r.rawScore as number),
   );
 
   const priorBD = prior.filter(r => r.qCode === 'BD');

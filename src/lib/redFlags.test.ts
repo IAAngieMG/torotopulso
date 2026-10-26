@@ -145,34 +145,14 @@ test('Alimentos (AL) se responde con emojis, no con calificación de calidad: un
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('"Inicio del día" (BD) del check-in viejo por botones (sin rawScore) nunca genera red flag de calificación baja', () => {
-  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: null, choice: 1 }));
+test('"BUK-E" (recordatorio de check-in de Buk, un botón) nunca genera red flag de calificación baja, aunque traiga rawScore/choice poblados (bugs 2026-10-19/26: BUK-E y BD son encuestas distintas)', () => {
+  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BUK-E', rawScore: 1, choice: 1 }));
   const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
 });
 
-test('"Inicio del día" (BD) del check-in viejo nunca genera red flag de calificación baja aunque el Sheet real también traiga rawScore poblado (bug 2026-10-19)', () => {
-  // El Sheet real puebla `rawScore` en el check-in viejo de botones también (reflejando el botón
-  // elegido, 1 o 2) — `choice` poblado, no la ausencia de `rawScore`, es la señal confiable de
-  // que es el formato viejo.
-  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1, choice: 1 }));
-  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
-  assert.ok(!flags.some(f => f.type === 'low_score'), JSON.stringify(flags));
-});
-
-test('"Inicio del día" (BD) en la escala 1-5 (desde oct 2026) sí genera red flag de calificación baja, igual que Cierre del día', () => {
+test('"Inicio del día" (BD) en la escala 1-5 sí genera red flag de calificación baja, igual que Cierre del día', () => {
   const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day => record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1 }));
-  const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
-  const flag = flags.find(f => f.type === 'low_score');
-  assert.ok(flag, JSON.stringify(flags));
-  assert.match(flag!.message, /Inicio del día/);
-});
-
-test('"Inicio del día" (BD) en la escala 1-5 SÍ genera red flag aunque traiga choice poblado, cuando el texto de la pregunta es la escala nueva (bug 2026-10-26)', () => {
-  const newFormatQuestion = '¿Cómo inicias tu día? 1 = 💀 Con sueño de ultratumba · 2 = 🧟 Como zombi · 3 = 👻 Ahí la llevo · 4 = 🎃 Con buena vibra · 5 = 🧹 ¡Con energía de escoba voladora!';
-  const records = WEEKDAYS_LAST_WEEK.slice(0, 4).map(day =>
-    record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD', rawScore: 1, choice: 1, question: newFormatQuestion }),
-  );
   const flags = computeRedFlagsForPerson(EMAIL, records, NOW);
   const flag = flags.find(f => f.type === 'low_score');
   assert.ok(flag, JSON.stringify(flags));
@@ -276,9 +256,9 @@ test('buildFlagContext combina BD (escala 1-5) con BT en priorAvgScore, igual qu
   assert.equal(context.priorAvgScore, 4);
 });
 
-test('buildFlagContext ignora BD del check-in viejo en priorAvgScore aunque traiga rawScore poblado (bug 2026-10-19)', () => {
+test('buildFlagContext ignora BUK-E (recordatorio de check-in de Buk, no una calificación) en priorAvgScore aunque traiga rawScore poblado (bugs 2026-10-19/26)', () => {
   const priorRecords = [
-    record({ timestamp: '2026-09-15T14:00:00.000Z', qCode: 'BD', rawScore: 1, choice: 1 }),
+    record({ timestamp: '2026-09-15T14:00:00.000Z', qCode: 'BUK-E', rawScore: 1, choice: 1 }),
     record({ timestamp: '2026-09-15T23:00:00.000Z', qCode: 'BT', rawScore: 5 }),
   ];
   const context = buildFlagContext(priorRecords, NOW);

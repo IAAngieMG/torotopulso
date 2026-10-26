@@ -30,40 +30,6 @@ const toNumberOrNull = (v: string): number | null => {
   return v !== '' && Number.isFinite(n) ? n : null;
 };
 
-/**
- * El check-in de entrada por botones llega del Sheet con el código "BUK-E" (del nombre de la
- * encuesta en Buk), no "BD" — sin este alias, todo lo que filtra por `qCode === 'BD'`
- * (`computeKpis`, `computeEntradaInsight`, red flags de "Inicio del día"...) nunca encontraba sus
- * respuestas, y encima `isFridaySignal` las contaba por error como encuesta de Viernes al no
- * reconocer "BUK-E" como uno de los slots diarios.
- */
-const QCODE_ALIASES: Record<string, string> = { 'BUK-E': 'BD' };
-
-function normalizeQCode(raw: string): string {
-  return QCODE_ALIASES[raw.trim().toUpperCase()] ?? raw;
-}
-
-/**
- * Detecta si una respuesta de "Inicio del día" (BD) es del check-in viejo por botones en vez de
- * la pregunta nueva de escala 1-5 (desde oct 2026). Antes se usaba solo `choice !== null`, pero
- * el Sheet real reportó (2026-10-24, luego confirmado el 2026-10-26 con una semana completa ya
- * en el formato nuevo) que `choice` puede seguir poblado también en la pregunta nueva — no es una
- * señal confiable por sí sola.
- *
- * La señal más directa es el texto real de la pregunta que se envió (`question`, columna del
- * Sheet con el mensaje tal cual se mandó por Buk ese día): la pregunta nueva siempre enumera sus
- * opciones como "1 = ... 2 = ... 5 = ...", algo que el check-in viejo por botones nunca trae. Si
- * `question` no está disponible (vacío), se cae de vuelta a `choice` para no perder la detección
- * que ya funcionaba en datos sin ese texto.
- */
-const LIKERT_SCALE_PATTERN = /[1-5]\s*=/;
-
-export function isLegacyBdCheckin(r: ResponseRecord): boolean {
-  if (r.qCode !== 'BD' || r.choice === null) return false;
-  if (r.question) return !LIKERT_SCALE_PATTERN.test(r.question);
-  return true;
-}
-
 /** Parses `Respuestas`. */
 export function parseRespuestas(rows: string[][]): ResponseRecord[] {
   return rows
@@ -73,7 +39,7 @@ export function parseRespuestas(rows: string[][]): ResponseRecord[] {
       timestamp: cell(row, 0),
       responseKey: cell(row, 1),
       surveyName: cell(row, 2),
-      qCode: normalizeQCode(cell(row, 3)),
+      qCode: cell(row, 3).trim().toUpperCase(),
       question: cell(row, 4),
       respondentName: cell(row, 5),
       email: cell(row, 6).toLowerCase(),
@@ -97,11 +63,21 @@ export function parsePreguntas(rows: string[][]): QuestionTemplate[] {
     .map(row => ({ mes: cell(row, 0), slot: cell(row, 1).toUpperCase(), mensaje: cell(row, 4) }));
 }
 
-const DAILY_SLOTS = ['BD', 'AL', 'BT'];
+/**
+ * "BD" (Inicio del día, escala 1-5) y "BUK-E" (recordatorio de check-in de entrada en Buk, un
+ * botón, no una calificación) son dos encuestas distintas y concurrentes — no una versión vieja
+ * y una nueva de la misma pregunta. Antes "BUK-E" se normalizaba a "BD" (ver git history), lo que
+ * mezclaba sus respuestas y rompía toda detección de "cuál es cuál" río abajo (`scoring.ts`,
+ * `redFlags.ts`), porque `rawScore`/`choice` se pueblan igual en ambas (mimetizan la opción
+ * elegida, 1-2 en BUK-E, 1-5 en BD) y `question` nunca trae el texto completo de la escala —
+ * solo el `qCode` crudo distingue una de la otra de forma confiable. "BUK-E" se incluye aquí
+ * para que `isFridaySignal` no la cuente por error como encuesta de Viernes.
+ */
+const DAILY_SLOTS = ['BD', 'AL', 'BT', 'BUK-E'];
 
 /**
  * Código de la encuesta especial "7 años Toroto" (aniversario), enviada una sola vez el 29 de
- * octubre de 2026 — ver `src/lib/anniversary.ts`. Va aparte de BD/AL/BT y de la encuesta de
+ * octubre de 2026 — ver `src/lib/anniversary.ts`. Va aparte de BD/AL/BT/BUK-E y de la encuesta de
  * Viernes, así que debe excluirse explícitamente de `isFridaySignal` (que de otro modo la
  * contaría como Viernes por eliminación) y del resto de los cálculos de KPIs normales.
  */
@@ -110,7 +86,7 @@ export const ANIV7_QCODE = 'ANIV7';
 /**
  * `Respuestas.qCode` no usa un código "VIERNES" literal para la encuesta larga del viernes:
  * usa códigos de pregunta rotativos (Q1..Q4, uno por semana, según cuál de las 4 preguntas del
- * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT/ANIV7 es, por eliminación, una
+ * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT/BUK-E/ANIV7 es, por eliminación, una
  * respuesta de la encuesta de Viernes.
  */
 export function isFridaySignal(qCode: string): boolean {
