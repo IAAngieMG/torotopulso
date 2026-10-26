@@ -304,8 +304,13 @@ export function computeChoiceBreakdown(records: ResponseRecord[], qCode: string)
  * IA para un texto que de todas formas viene de datos determinísticos.
  *
  * `records` es el mismo conjunto ya filtrado por rango/señal que produjo `kpis`/`weeklySeries`;
- * se usa aquí solo para las señales de opción múltiple (entrada a tiempo, comida) que no caben en
- * `OverviewKpis`.
+ * se usa aquí solo para la señal de opción múltiple (comida) que no cabe en `OverviewKpis`.
+ *
+ * La puntualidad del check-in de Buk (BUK-E, `computeEntradaInsight`/`bdOnTimePct`) ya NO se
+ * menciona aquí (a petición de Angie, 2026-10-26: "esta métrica ya no debe estar en ningún lado
+ * en pulso ia") — sigue disponible aparte en los KPIs/widgets de la línea de equipo, pero fuera
+ * del resumen de Pulso IA. `entrada` solo se usa para no mostrar "sin respuestas" cuando la única
+ * actividad del rango fue ese check-in.
  */
 export function buildAutoInsight(
   kpis: OverviewKpis,
@@ -337,13 +342,6 @@ export function buildAutoInsight(
     : `${capitalizedScope} no tiene calificación de ánimo registrada en este rango.`;
 
   const bullets: string[] = [];
-  if (entrada) {
-    // Solo se menciona lo que sí pasó: si el 100% registró a tiempo, decir además "0 avisaron
-    // que la registrarían después" no aporta nada (es obvio) — esa cláusula solo suma cuando
-    // hay un reparto real entre los dos botones.
-    const aviso = entrada.laRegistroAhoraCount > 0 ? `; ${entrada.laRegistroAhoraCount} de ${entrada.total} avisó que la registraría más tarde` : '';
-    bullets.push(`**${entrada.onTimePct}%** registró su entrada a tiempo (9:00–9:30 am)${aviso}.`);
-  }
   if (lunch.length > 0) {
     const top = lunch[0];
     bullets.push(`La opción de comida más elegida fue la opción **#${top.choice}** (${top.pct}% de las respuestas).`);
@@ -363,8 +361,6 @@ export function buildAutoInsight(
   let recommendation: string | null = null;
   if (worstMoodDay && dayMood(worstMoodDay) < 3.5) {
     recommendation = `Revisar qué ocurrió el ${worstMoodDay.day.toLowerCase()}, cuando el ánimo bajó a ${dayMood(worstMoodDay).toFixed(1)}/5.`;
-  } else if (entrada && entrada.onTimePct < 70) {
-    recommendation = `Solo ${entrada.onTimePct}% registró su entrada entre 9:00 y 9:30 am — vale la pena recordar el horario.`;
   } else if (kpis.onTimePct !== null && kpis.onTimePct < 70) {
     recommendation = `Solo ${kpis.onTimePct}% de las respuestas llegaron a tiempo — vale la pena recordar el horario en el standup.`;
   } else if (kpis.participationPct !== null && kpis.participationPct < 80) {

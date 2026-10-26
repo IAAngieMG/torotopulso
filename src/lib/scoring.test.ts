@@ -263,9 +263,7 @@ test('computeChoiceBreakdown reparte por choice y ordena de mayor a menor', () =
   assert.equal(breakdown.length, 3);
 });
 
-test('buildAutoInsight basa el clima solo en bdOnTimePct/puntualidad cuando solo hubo BUK-E (sin BD)', () => {
-  // BUK-E (recordatorio de check-in de Buk) nunca entra en moodAverage ni en el clima — solo
-  // Cierre del día cuenta en este caso.
+test('buildAutoInsight nunca menciona la puntualidad de BUK-E (a petición de Angie, 2026-10-26) aunque solo haya respuestas de ese check-in', () => {
   const kpis = {
     bdAverage: null,
     btAverage: 4.5,
@@ -283,8 +281,9 @@ test('buildAutoInsight basa el clima solo en bdOnTimePct/puntualidad cuando solo
   ];
   const insight = buildAutoInsight(kpis, [], 'la tropa', records);
   assert.match(insight.headline, /estable y positivo/);
-  assert.ok(insight.bullets.some(b => b.includes('registró su entrada a tiempo')));
+  assert.ok(!insight.bullets.some(b => b.includes('registró su entrada a tiempo')));
   assert.ok(!insight.bullets.some(b => b.includes('inicio del día promedió')));
+  assert.ok(!insight.recommendation?.includes('registró su entrada'));
 });
 
 test('buildAutoInsight combina bdAverage (escala 1-5 desde oct 2026) con btAverage para el clima', () => {
@@ -324,49 +323,22 @@ test('buildAutoInsight sin ninguna calificación de ánimo (BD ni BT) no opina d
   assert.match(insight.headline, /no tiene calificación de ánimo registrada/);
 });
 
-test('buildAutoInsight omite "avisó que la registraría más tarde" cuando el 100% ya registró a tiempo', () => {
-  // Si todos registraron a tiempo, decir "0 de N avisó..." es obvio y no debe aparecer.
+test('buildAutoInsight no entra en "sin respuestas" cuando la única actividad del rango fue BUK-E, pero tampoco la menciona', () => {
   const kpis = {
     bdAverage: null,
-    btAverage: 4,
-    moodAverage: 4,
-    overallAverage: 4,
+    btAverage: null,
+    moodAverage: null,
+    overallAverage: null,
     participationPct: 100,
     participationDetail: '1 de 1 personas',
     onTimePct: null,
     bdOnTimePct: 100,
     bdOnTimeDetail: '5 registraron su entrada · 0 avisaron que la registrarían después',
   };
-  const records = [
-    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }),
-    rec({ qCode: 'BT', rawScore: 4 }),
-  ];
+  const records = [rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' })];
   const insight = buildAutoInsight(kpis, [], 'Juan', records, true);
-  const entradaBullet = insight.bullets.find(b => b.includes('registró su entrada a tiempo'));
-  assert.ok(entradaBullet);
-  assert.ok(!entradaBullet!.includes('avisó'));
-  assert.match(entradaBullet!, /^\*\*100%\*\* registró su entrada a tiempo \(9:00–9:30 am\)\.$/);
-});
-
-test('buildAutoInsight incluye la cláusula de aviso cuando hay un reparto real entre los dos botones', () => {
-  const kpis = {
-    bdAverage: null,
-    btAverage: 4,
-    moodAverage: 4,
-    overallAverage: 4,
-    participationPct: 100,
-    participationDetail: '2 de 2 personas',
-    onTimePct: null,
-    bdOnTimePct: 50,
-    bdOnTimeDetail: '1 registraron su entrada · 1 avisaron que la registrarían después',
-  };
-  const records = [
-    rec({ qCode: 'BUK-E', choice: 1, rawScore: 1, timestamp: '2026-10-06T15:05:00.000Z' }),
-    rec({ qCode: 'BUK-E', choice: 2, rawScore: 2, timestamp: '2026-10-06T19:00:00.000Z' }),
-  ];
-  const insight = buildAutoInsight(kpis, [], 'la tropa', records);
-  const entradaBullet = insight.bullets.find(b => b.includes('registró su entrada a tiempo'));
-  assert.ok(entradaBullet?.includes('avisó que la registraría más tarde'));
+  assert.doesNotMatch(insight.headline, /Todavía no hay respuestas/);
+  assert.ok(!insight.bullets.some(b => b.includes('registró su entrada a tiempo')));
 });
 
 test('buildAutoInsight no incluye "(cómo se sintieron)" en el bullet de Cierre del día', () => {
