@@ -113,6 +113,29 @@ test('bdAverage/moodAverage/overallAverage ignoran el check-in viejo de BD aunqu
   assert.equal(kpis.overallAverage, 4);
 });
 
+test('bdAverage SÍ cuenta BD del formato nuevo aunque traiga choice poblado, cuando el texto de la pregunta enviada es la escala 1-5 (bug 2026-10-26)', () => {
+  // Una semana completa después del cambio de formato (19-25 oct) siguió mostrando el % de Buk
+  // en vez de la escala 1-5 — resultó que el Sheet real también puebla `choice` en la pregunta
+  // nueva (no solo en el check-in viejo, como se asumió al corregir el bug anterior). La señal
+  // confiable es el texto real de la pregunta enviada (`question`): la pregunta nueva siempre
+  // enumera sus opciones como "1 = ... 5 = ...", el check-in viejo nunca lo hace.
+  const newFormatQuestion = '¡Boo-enos días! 👻 Recuerda hacer tu check-in de entrada en Buk. ¿Cómo inicias tu día? 1 = 💀 Con sueño de ultratumba · 2 = 🧟 Como zombi · 3 = 👻 Ahí la llevo · 4 = 🎃 Con buena vibra · 5 = 🧹 ¡Con energía de escoba voladora!';
+  const records = [
+    rec({ qCode: 'BD', choice: 1, rawScore: 1, question: newFormatQuestion, email: 'a@toroto.mx' }),
+    rec({ qCode: 'BD', choice: 5, rawScore: 5, question: newFormatQuestion, email: 'b@toroto.mx' }),
+  ];
+  const kpis = computeKpis(records, 2);
+  assert.equal(kpis.bdAverage, 3);
+  assert.equal(kpis.moodAverage, 3);
+});
+
+test('bdOnTimePct sigue leyendo el check-in viejo normalmente cuando question está vacío (sin texto para distinguir, se cae de vuelta a choice)', () => {
+  const records = [rec({ qCode: 'BD', choice: 1, rawScore: null, question: '', timestamp: '2026-10-06T15:05:00.000Z' })];
+  const kpis = computeKpis(records, 1);
+  assert.equal(kpis.bdOnTimePct, 100);
+  assert.equal(kpis.bdAverage, null);
+});
+
 test('computeWeeklySeries regresa 5 puntos (lunes a viernes)', () => {
   const points = computeWeeklySeries([], new Date('2026-09-03'));
   assert.equal(points.length, 5);
