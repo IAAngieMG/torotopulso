@@ -4,9 +4,20 @@ import { resolveOrgAccess } from './orgPermissions.ts';
 import { buildPulsoBrief } from './pulsoBrief.ts';
 import type { ResponseRecord } from './pulseData.ts';
 
+/** Por qué `mcpAuthenticate` (server.ts) no pudo resolver un correo a partir del header `Authorization`. */
+export type McpAuthFailureReason = 'missing_header' | 'malformed_token' | 'not_found';
+
+const AUTH_FAILURE_DETAIL: Record<McpAuthFailureReason, string> = {
+  missing_header: 'No llegó ningún header "Authorization" en la petición — revisa que el conector lo tenga configurado.',
+  malformed_token: 'El header "Authorization" llegó pero no trae el formato esperado "Bearer pt_...".',
+  not_found: 'El token no coincide con ninguno activo: puede estar mal copiado (espacios o saltos de línea de más) o haber sido revocado/regenerado. Genera uno nuevo en "Acceso API" y vuelve a pegarlo completo.',
+};
+
 export interface PulsoMcpOptions {
   /** Correo ya autenticado (dueño del token de API que llamó al conector) — nunca viene del cliente MCP. `null` si la petición no trajo un token válido: el handshake (`initialize`/`tools/list`) igual se completa, y la tool sola devuelve el error de auth al invocarse. */
   email: string | null;
+  /** Por qué `email` es `null`, para dar un mensaje de error más específico que ayude a diagnosticar (no distingue entre sí: "falta header" vs "token no encontrado" son errores muy distintos de resolver). */
+  authFailureReason?: McpAuthFailureReason;
   loadRecords: () => Promise<ResponseRecord[]>;
 }
 
@@ -20,7 +31,7 @@ export interface PulsoMcpOptions {
  * hacen una conexión de prueba sin credenciales antes de aplicar el header configurado, y un 401 a
  * nivel de transporte ahí se ve como "servidor inválido" en vez de un problema de auth.
  */
-export function createPulsoMcpServer({ email, loadRecords }: PulsoMcpOptions): McpServer {
+export function createPulsoMcpServer({ email, authFailureReason, loadRecords }: PulsoMcpOptions): McpServer {
   const server = new McpServer({ name: 'pulso-toroto', version: '1.0.0' });
 
   server.registerTool(
@@ -35,7 +46,8 @@ export function createPulsoMcpServer({ email, loadRecords }: PulsoMcpOptions): M
     },
     async ({ range }) => {
       if (!email) {
-        return { content: [{ type: 'text' as const, text: 'Token de API inválido, revocado o no provisto.' }], isError: true };
+        const detail = authFailureReason ? ` ${AUTH_FAILURE_DETAIL[authFailureReason]}` : '';
+        return { content: [{ type: 'text' as const, text: `Token de API inválido, revocado o no provisto.${detail}` }], isError: true };
       }
       const access = resolveOrgAccess(email);
       if (!access.granted) {

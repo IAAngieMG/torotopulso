@@ -282,7 +282,7 @@ async function saveApiTokens(tokens: Record<string, ApiTokenRecord>) {
 
 // --- Express app -------------------------------------------------------------
 async function auth(req: Request, res: Response, next: NextFunction) {
-  const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const t = String(req.headers.authorization || '').trim().replace(/^Bearer\s+/i, '').trim();
   if (t.startsWith(API_TOKEN_PREFIX)) {
     // req.path es relativo al punto de montaje ('/api'), ej. '/pulse/overview' o '/me'.
     if (!isReadOnlyPulseRoute(req.method, req.path)) {
@@ -885,12 +885,15 @@ export async function createApp() {
   // sus propios servidores, no desde el sandbox del chat, así que no choca con listas de sitios
   // permitidos del lado del cliente. Servidor MCP nuevo por request (modo stateless): encaja con
   // el runtime sin estado de las funciones de Netlify, ver `createPulsoMcpServer`.
-  async function mcpAuthenticate(req: Request): Promise<{ email: string } | null> {
-    const t = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!t.startsWith(API_TOKEN_PREFIX)) return null;
+  type McpAuthFailureReason = 'missing_header' | 'malformed_token' | 'not_found';
+  async function mcpAuthenticate(req: Request): Promise<{ email: string | null; failureReason?: McpAuthFailureReason }> {
+    const raw = String(req.headers.authorization || '').trim();
+    if (!raw) return { email: null, failureReason: 'missing_header' };
+    const t = raw.replace(/^Bearer\s+/i, '').trim();
+    if (!t.startsWith(API_TOKEN_PREFIX)) return { email: null, failureReason: 'malformed_token' };
     const tokens = await loadApiTokens();
     const record = findApiTokenByRaw(tokens, t);
-    if (!record) return null;
+    if (!record) return { email: null, failureReason: 'not_found' };
     tokens[record.id] = { ...record, lastUsedAt: new Date().toISOString() };
     saveApiTokens(tokens).catch(() => {});
     return { email: record.email };
@@ -970,7 +973,11 @@ export async function createApp() {
     // datos sin un token válido.
     const session = await mcpAuthenticate(req);
     try {
-      const server = createPulsoMcpServer({ email: session?.email ?? null, loadRecords: async () => (await loadPulseData()).responses });
+      const server = createPulsoMcpServer({
+        email: session.email,
+        authFailureReason: session.failureReason,
+        loadRecords: async () => (await loadPulseData()).responses,
+      });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on('close', () => {
         transport.close();
