@@ -4,7 +4,8 @@ import { scopedTeamNames } from './orgPermissions.ts';
 import { rosterEmailsForTeam, rosterForTeams, teamByName } from './orgChart.ts';
 import { computeRedFlagsForRoster, computeVacationStatusForRoster } from './redFlags.ts';
 import { filterVacationingEmails } from './vacations.ts';
-import { applySignalFilter, buildAutoInsight, computeKpis, computeWeeklySeries, inRange, type OverviewKpis } from './scoring.ts';
+import { applySignalFilter, buildAutoInsight, computeKpis, computeWeeklySeries, inRange, rangeWindow, type OverviewKpis } from './scoring.ts';
+import { incidentNotesForRange } from './incidents.ts';
 
 /** Periodos que el brief de Pulso expone hacia afuera (ej. el conector MCP) — subconjunto de RangeOption sin 'realtime'/'lastWeek', que son solo para la UI. */
 export type BriefRange = 'week' | 'month' | 'quarter' | 'semester' | 'year';
@@ -48,7 +49,8 @@ export function buildPulsoBrief({ access, email, allRecords, range, now = new Da
   const kpis = computeKpis(records, scopedRosterEmails.size);
   const weeklySeries = computeWeeklySeries(records, now, range);
   const scopeLabel = access.dataScope === 'all' ? 'toda la tropa' : teamsInScope.join(', ') || 'tu equipo';
-  const insight = buildAutoInsight(kpis, weeklySeries, scopeLabel, records);
+  const { start: rangeStart, end: rangeEnd } = rangeWindow(range, now);
+  const insight = buildAutoInsight(kpis, weeklySeries, scopeLabel, records, false, incidentNotesForRange(rangeStart, rangeEnd));
 
   const teamLines = teamsInScope.map(teamName => {
     const team = teamByName(teamName);

@@ -306,6 +306,41 @@ test('buildAutoInsight combina bdAverage (escala 1-5 desde oct 2026) con btAvera
   assert.ok(insight.bullets.some(b => b.includes('cierre del día promedió **4.5/5**')));
 });
 
+test('buildAutoInsight agrega la nota de incidencia técnica al final cuando se pasa una', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: 4.5,
+    moodAverage: 4.5,
+    overallAverage: 4.5,
+    participationPct: 100,
+    participationDetail: '1 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: null,
+    bdOnTimeDetail: null,
+  };
+  const note = 'El 27/10 el cierre del día no se envió por una falla técnica; no afecta la participación.';
+  const insight = buildAutoInsight(kpis, [], 'la tropa', [], false, [note]);
+  assert.strictEqual(insight.bullets[insight.bullets.length - 1], note);
+});
+
+test('buildAutoInsight agrega la nota de incidencia técnica incluso cuando no hay respuestas en el rango', () => {
+  const kpis = {
+    bdAverage: null,
+    btAverage: null,
+    moodAverage: null,
+    overallAverage: null,
+    participationPct: null,
+    participationDetail: '0 de 1 personas',
+    onTimePct: null,
+    bdOnTimePct: null,
+    bdOnTimeDetail: null,
+  };
+  const note = 'El 27/10 el cierre del día no se envió por una falla técnica; no afecta la participación.';
+  const insight = buildAutoInsight(kpis, [], 'la tropa', [], false, [note]);
+  assert.match(insight.headline, /Todavía no hay respuestas registradas/);
+  assert.deepStrictEqual(insight.bullets, [note]);
+});
+
 test('buildAutoInsight sin ninguna calificación de ánimo (BD ni BT) no opina del ánimo, aunque haya datos de Alimentos', () => {
   const kpis = {
     bdAverage: null,

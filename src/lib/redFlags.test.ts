@@ -105,6 +105,21 @@ test('saltarse "Cierre del día" en 4 de 5 días activos sí genera red flag de 
   );
 });
 
+test('saltarse "Cierre del día" el día de una incidencia técnica conocida no cuenta para la red flag de faltante', () => {
+  // Martes 3 de noviembre 2026 -> "semana pasada" = lunes 26 a viernes 30 de octubre, que
+  // incluye el 27/10 (incidencia técnica registrada en incidents.ts: Cierre del día no se envió).
+  const now = new Date('2026-11-03T15:00:00.000Z');
+  const activeDays = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29'];
+  const records = activeDays.flatMap(day => [
+    record({ timestamp: `${day}T14:00:00.000Z`, qCode: 'BD' }),
+    record({ timestamp: `${day}T17:00:00.000Z`, qCode: 'AL' }),
+  ]);
+  const flags = computeRedFlagsForPerson(EMAIL, records, now);
+  // Sin la excepción serían 4 días saltados (> 3, dispara la flag); con la excepción solo
+  // cuentan 26, 28 y 29 (3 días, no dispara).
+  assert.ok(!flags.some(f => f.type === 'missing_response' && f.message.includes('Cierre del día')), JSON.stringify(flags));
+});
+
 test('completar los 3 slots de un día no genera red flags de faltante ese día', () => {
   const flags = computeRedFlagsForPerson(
     EMAIL,

@@ -318,12 +318,17 @@ export function buildAutoInsight(
   scopeLabel: string,
   records: ResponseRecord[] = [],
   isPerson = false,
+  technicalNotes: string[] = [],
 ): AutoInsight {
   const entrada = computeEntradaInsight(records);
   const lunch = computeChoiceBreakdown(records, 'AL');
 
   if (kpis.moodAverage === null && entrada === null && lunch.length === 0) {
-    return { headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`, bullets: [], recommendation: null };
+    return {
+      headline: `Todavía no hay respuestas registradas para ${scopeLabel} en este rango.`,
+      bullets: [...technicalNotes],
+      recommendation: null,
+    };
   }
 
   const withMood = weeklySeries.filter(p => p.bt !== null || p.bd !== null);
@@ -357,6 +362,10 @@ export function buildAutoInsight(
         : `Participación de **${kpis.participationPct}%** (${kpis.participationDetail}).`,
     );
   }
+
+  // Nota de incidencias técnicas (ej. el cierre del 27/10 no enviado) al final del resumen,
+  // cuando el rango analizado incluyó esa fecha — ver incidents.ts.
+  bullets.push(...technicalNotes);
 
   let recommendation: string | null = null;
   if (worstMoodDay && dayMood(worstMoodDay) < 3.5) {
