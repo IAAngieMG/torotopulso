@@ -33,6 +33,7 @@ import {
   allViewAsTargets,
   FEEDBACK_INBOX_EMAILS,
   VIEW_AS_MANAGER_EMAILS,
+  API_TOKEN_ACCESS_EMAILS,
 } from './src/lib/orgPermissions.ts';
 import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster } from './src/lib/redFlags.ts';
 import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
@@ -294,6 +295,7 @@ async function auth(req: Request, res: Response, next: NextFunction) {
       const tokens = await loadApiTokens();
       const record = findApiTokenByRaw(tokens, t);
       if (!record) return res.status(401).json({ error: 'Token de API inválido o revocado.' });
+      if (!API_TOKEN_ACCESS_EMAILS.includes(record.email)) return res.status(403).json({ error: 'Acceso API no habilitado para esta cuenta.' });
       (req as any).session = { email: record.email, name: record.label || record.email, expiresAt: Infinity } as SignedSession;
       (req as any).isApiToken = true;
       tokens[record.id] = { ...record, lastUsedAt: new Date().toISOString() };
@@ -399,6 +401,7 @@ export async function createApp() {
       isViewingAs: effective.isViewingAs,
       canUseViewAs,
       viewAsOptions: canUseViewAs ? allViewAsTargets([session.email]) : [],
+      canUseApiTokens: API_TOKEN_ACCESS_EMAILS.includes(session.email),
     });
   });
 
@@ -407,6 +410,7 @@ export async function createApp() {
   // ni listar otros tokens (auth() ya lo bloquea por no ser una ruta de solo lectura de Pulso).
   app.post('/api/tokens', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    if (!API_TOKEN_ACCESS_EMAILS.includes(session.email)) return res.status(403).json({ error: 'Acceso API no habilitado para tu cuenta.' });
     try {
       const label = cleanLabel(req.body?.label) || 'Token sin nombre';
       const tokens = await loadApiTokens();
@@ -426,6 +430,7 @@ export async function createApp() {
 
   app.get('/api/tokens', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    if (!API_TOKEN_ACCESS_EMAILS.includes(session.email)) return res.status(403).json({ error: 'Acceso API no habilitado para tu cuenta.' });
     try {
       const tokens = await loadApiTokens();
       const mine = Object.values(tokens)
@@ -440,6 +445,7 @@ export async function createApp() {
 
   app.delete('/api/tokens/:id', async (req, res) => {
     const session = (req as any).session as SignedSession;
+    if (!API_TOKEN_ACCESS_EMAILS.includes(session.email)) return res.status(403).json({ error: 'Acceso API no habilitado para tu cuenta.' });
     try {
       const id = clean(req.params.id, 100);
       const tokens = await loadApiTokens();
@@ -909,6 +915,7 @@ export async function createApp() {
     const tokens = await loadApiTokens();
     const record = findApiTokenByRaw(tokens, t);
     if (!record) return null;
+    if (!API_TOKEN_ACCESS_EMAILS.includes(record.email)) return null;
     tokens[record.id] = { ...record, lastUsedAt: new Date().toISOString() };
     saveApiTokens(tokens).catch(() => {});
     return { email: record.email };

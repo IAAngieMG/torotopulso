@@ -39,9 +39,11 @@ export default function Shell({ me, view, onNavigate, children }: ShellProps) {
                 <LogOut size={12} /> Salir
               </button>
             </div>
-            <button onClick={() => setShowApiTokens(true)} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
-              <KeyRound size={14} /> Acceso API
-            </button>
+            {me.canUseApiTokens && (
+              <button onClick={() => setShowApiTokens(true)} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
+                <KeyRound size={14} /> Acceso API
+              </button>
+            )}
           </div>
           <nav className="flex md:flex-col gap-1 flex-1">
             {navItems.map(item => (
