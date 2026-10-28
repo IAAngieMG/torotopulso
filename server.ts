@@ -36,6 +36,7 @@ import {
 } from './src/lib/orgPermissions.ts';
 import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster } from './src/lib/redFlags.ts';
 import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
+import { incidentNotesForRange } from './src/lib/incidents.ts';
 import { pollyHistoryFor } from './src/lib/pollyHistory.ts';
 import {
   computeKpis,
@@ -43,6 +44,7 @@ import {
   computeEnergyDistribution,
   buildAutoInsight,
   inRange,
+  rangeWindow,
   applySignalFilter,
   kpisForPersonInRange,
   type RangeFilter,
@@ -478,13 +480,21 @@ export async function createApp() {
 
     const kpis = computeKpis(records, rosterEmails.size);
     const weeklySeries = computeWeeklySeries(records, new Date(), range);
+    const { start: rangeStart, end: rangeEnd } = rangeWindow(range, new Date());
     res.json({
       teams: teamsInScope,
       availableTeams: myTeams,
       kpis,
       weeklySeries,
       energyDistribution: computeEnergyDistribution(records),
-      insight: buildAutoInsight(kpis, weeklySeries, requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos'), records),
+      insight: buildAutoInsight(
+        kpis,
+        weeklySeries,
+        requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos'),
+        records,
+        false,
+        incidentNotesForRange(rangeStart, rangeEnd),
+      ),
       questions: {
         BD: currentQuestionFor(data.preguntas, 'BD'),
         AL: currentQuestionFor(data.preguntas, 'AL'),
@@ -688,6 +698,7 @@ export async function createApp() {
     const lastWeekRecords = allPersonRecords.filter(r => inRange(r, { range: 'lastWeek', now }));
     const lastWeekKpis = computeKpis(lastWeekRecords, 1);
     const lastWeekSeries = computeWeeklySeries(lastWeekRecords, now, 'lastWeek');
+    const { start: lastWeekStart, end: lastWeekEnd } = rangeWindow('lastWeek', now);
 
     res.json({
       email: targetEmail,
@@ -698,7 +709,14 @@ export async function createApp() {
       redFlags: computeRedFlagsForPerson(targetEmail, allPersonRecords, new Date()),
       vacationLabel: vacation ? vacationLabel(vacation) : null,
       pollyHistory: pollyHistoryFor(targetEmail),
-      lastWeekInsight: buildAutoInsight(lastWeekKpis, lastWeekSeries, fullNameFor(targetEmail), lastWeekRecords, true),
+      lastWeekInsight: buildAutoInsight(
+        lastWeekKpis,
+        lastWeekSeries,
+        fullNameFor(targetEmail),
+        lastWeekRecords,
+        true,
+        incidentNotesForRange(lastWeekStart, lastWeekEnd),
+      ),
     });
   });
 

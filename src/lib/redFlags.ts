@@ -1,6 +1,7 @@
 import type { ResponseRecord } from './pulseData.ts';
 import { rangeWindow } from './scoring.ts';
 import { activeVacation } from './vacations.ts';
+import { isIncidentDate } from './incidents.ts';
 
 /**
  * Detección de "red flags" por persona a partir de su propio historial de respuestas — sin IA
@@ -31,6 +32,11 @@ import { activeVacation } from './vacations.ts';
  * siquiera informativa; ya se muestran aparte junto al nombre de la persona
  * (`vacationLabel`/`VacationBadge`). Los días hábiles fuera de ese rango en esa misma semana
  * siguen las reglas normales.
+ *
+ * Un día con una incidencia técnica conocida (src/lib/incidents.ts, ej. el cierre del 27 de
+ * octubre de 2026 que no se envió por una falla de Google Sheets) tampoco cuenta como "no
+ * respondió Cierre del día" aunque la persona sí haya participado ese día en otra encuesta —
+ * nadie recibió esa encuesta, así que no hay nada que se haya saltado.
  *
  * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
  * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
@@ -169,7 +175,12 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
     });
   }
 
-  const btMissingDays = activeDateKeys.filter(dateKey => !byDate.get(dateKey)!.some(r => r.qCode === 'BT'));
+  // Días con una incidencia técnica conocida para "Cierre del día" (ver incidents.ts, ej. el
+  // 27 de octubre de 2026) se excluyen de este patrón: la encuesta no se envió por una falla
+  // ajena al equipo, así que no contestarla ese día no es un "se saltó el slot".
+  const btMissingDays = activeDateKeys.filter(
+    dateKey => !isIncidentDate(dateKey, 'BT') && !byDate.get(dateKey)!.some(r => r.qCode === 'BT'),
+  );
   if (btMissingDays.length > PATTERN_DAYS_THRESHOLD) {
     flags.push({
       type: 'missing_response',
