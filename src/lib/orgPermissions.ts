@@ -30,6 +30,9 @@ export const FEEDBACK_INBOX_EMAILS = ['karla@toroto.mx', 'samantha@toroto.mx', '
 /** Angie y Karla pueden simular cualquier perfil con acceso a la plataforma vía "Ver como". */
 export const VIEW_AS_MANAGER_EMAILS = ['ti@toroto.mx', 'karla@toroto.mx'];
 
+/** Únicas cuentas que pueden crear/ver/revocar sus propios tokens personales de API ("Acceso API"). */
+export const API_TOKEN_ACCESS_EMAILS = ['ti@toroto.mx', 'david@toroto.mx', 'santiago@toroto.mx'];
+
 export interface ViewAsTarget {
   email: string;
   label: string;

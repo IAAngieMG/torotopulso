@@ -51,6 +51,8 @@ export interface Me {
   /** True para las cuentas de Angie y Karla — controla si se muestra el selector "Ver como". */
   canUseViewAs: boolean;
   viewAsOptions: ViewAsOption[];
+  /** True solo para las cuentas habilitadas para crear/ver/revocar tokens personales de "Acceso API". */
+  canUseApiTokens: boolean;
 }
 
 export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';

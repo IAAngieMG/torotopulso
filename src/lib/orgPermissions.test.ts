@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveOrgAccess, scopedTeamNames, allViewAsTargets } from './orgPermissions.ts';
+import { resolveOrgAccess, scopedTeamNames, allViewAsTargets, API_TOKEN_ACCESS_EMAILS } from './orgPermissions.ts';
 import { allTeamNames } from './orgChart.ts';
 
 test('los 4 correos de visión global ven todos los equipos, aunque no lideren ninguna DIRECCIÓN', () => {
@@ -147,4 +147,9 @@ test('allViewAsTargets incluye a todo líder y perfil con acceso otorgado, no un
   assert.ok(emails.includes('luis@toroto.mx'));
   assert.ok(!emails.includes('ti@toroto.mx'), 'no debe incluirse a quien está viendo la lista');
   assert.ok(!emails.includes('ana@toroto.mx'), 'quien no tiene acceso otorgado no debe aparecer como destino de "Ver como"');
+});
+
+test('solo Angie, David y Santiago tienen "Acceso API" habilitado', () => {
+  assert.deepEqual(new Set(API_TOKEN_ACCESS_EMAILS), new Set(['ti@toroto.mx', 'david@toroto.mx', 'santiago@toroto.mx']));
+  assert.ok(!API_TOKEN_ACCESS_EMAILS.includes('karla@toroto.mx'), 'Karla no debe tener Acceso API solo por ser visión global/Ver como');
 });
