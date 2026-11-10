@@ -46,7 +46,6 @@ export const ORG_TEAMS: OrgTeam[] = [
     leader: m('Daniela Gavaldón Eichelmann', 'dgavaldon@toroto.mx'),
     members: [
       m('Patricia Mendoza Elizarraras', 'patricia@toroto.mx'),
-      m('Iván Castro Trujano', 'ivancastro@toroto.mx'),
       m('Lourdes Montejo Montejo', 'lourdes@toroto.mx'),
     ],
   },
@@ -56,8 +55,11 @@ export const ORG_TEAMS: OrgTeam[] = [
     members: [m('Samantha Ortiz Sanchez', 'samantha@toroto.mx'), m('Karla Rebolledo Fernandez', 'karla@toroto.mx')],
   },
   {
+    // Iván Castro ya no está en Toroto/ya no lidera AYC — Daniela toma el equipo directamente
+    // (además de "Dirección de Operaciones Corporativas"), así la cascada sigue llegando hasta
+    // Administración y Contabilidad sin depender de Iván.
     name: 'AYC',
-    leader: m('Iván Castro Trujano', 'ivancastro@toroto.mx'),
+    leader: m('Daniela Gavaldón Eichelmann', 'dgavaldon@toroto.mx'),
     members: [
       m('Raúl Lucario Benitez', 'raul@toroto.mx'),
       m('Iris Becerra Reyes', 'iris@toroto.mx'),

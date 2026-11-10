@@ -27,14 +27,21 @@ test('Samantha ya no tiene visión global: solo ve el pulso de RH (acceso restri
   assert.deepEqual(access.dataScope, ['RH']);
 });
 
-test('el "General" de un líder se calcula en cascada, no de una lista fija (ejemplo de validación: Iván/AYC)', () => {
+test('Iván Castro ya no tiene acceso: salió de Toroto y AYC ahora la lidera Daniela', () => {
   const access = resolveOrgAccess('ivancastro@toroto.mx');
+  assert.equal(access.granted, false);
+});
+
+test('Daniela lidera Operaciones Corporativas y AYC a la vez: su cascada llega hasta Contabilidad y Administración', () => {
+  const access = resolveOrgAccess('dgavaldon@toroto.mx');
   assert.equal(access.granted, true);
   assert.equal(access.visionGlobal, false);
-  assert.equal(access.primaryTeam, 'AYC');
+  assert.equal(access.primaryTeam, 'Dirección de Operaciones Corporativas');
+  assert.ok(access.secondaryTeams.includes('AYC'));
+  assert.ok(access.secondaryTeams.includes('RH'));
   // AYC (Raúl, Iris, Aretha) -> Raúl lidera Contabilidad, Iris lidera Administración.
-  assert.deepEqual(access.secondaryTeams, ['Contabilidad', 'Administración']);
-  assert.deepEqual(scopedTeamNames(access), ['AYC', 'Contabilidad', 'Administración']);
+  assert.ok(access.secondaryTeams.includes('Contabilidad'));
+  assert.ok(access.secondaryTeams.includes('Administración'));
 });
 
 test('Alejandro tiene visión global igual que Santiago', () => {
