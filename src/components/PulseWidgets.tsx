@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TreePalm, Sparkles, Lightbulb, Baby } from 'lucide-react';
-import type { AutoInsight, DailyPoint, EnergyDistribution, Kpis } from '../lib/apiClient.ts';
+import type { AutoInsight, DailyPoint, EnergyDistribution, Kpis, YearMonthlyPoint } from '../lib/apiClient.ts';
 
 /** Renders `**texto**` como negritas, sin traer una librería de markdown para esto. */
 export function Bold({ text }: { text: string }) {
@@ -152,6 +152,24 @@ export function WeeklyLineChart({ points, title = 'Evolución' }: { points: Dail
           />
           <Line yAxisId="left" type="monotone" dataKey="bd" name="Inicio (BD)" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
           <Line yAxisId="left" type="monotone" dataKey="bt" name="Cierre (BT)" stroke="#0055b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function YearlyLineChart({ points, title = 'Tu año, mes a mes' }: { points: YearMonthlyPoint[]; title?: string }) {
+  return (
+    <div className="rounded-xl border border-toroto-border bg-white p-4">
+      <p className="font-display font-semibold text-sm mb-3">{title}</p>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={points} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+          <YAxis domain={[1, 5]} tick={{ fontSize: 12 }} stroke="#94a3b8" />
+          <Tooltip />
+          <Line type="monotone" dataKey="bd" name="Inicio (BD)" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          <Line type="monotone" dataKey="bt" name="Cierre (BT)" stroke="#0055b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
         </LineChart>
       </ResponsiveContainer>
     </div>

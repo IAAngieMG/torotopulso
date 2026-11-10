@@ -6,12 +6,15 @@ import Dashboard from './components/Dashboard.tsx';
 import TeamDetail from './components/TeamDetail.tsx';
 import PersonDetail from './components/PersonDetail.tsx';
 import FeedbackInbox from './components/FeedbackInbox.tsx';
+import PulsoPause from './components/PulsoPause.tsx';
+import YearReview from './components/YearReview.tsx';
 
 type View =
   | { name: 'overview' }
   | { name: 'team'; team: string }
   | { name: 'person'; email: string }
-  | { name: 'feedback' };
+  | { name: 'feedback' }
+  | { name: 'yearreview' };
 
 /**
  * La vista completa vive en `location.hash` (no solo en estado de React) para que el botón de
@@ -29,6 +32,8 @@ function viewToHash(view: View): string {
       return `#/person/${encodeURIComponent(view.email)}`;
     case 'feedback':
       return '#/feedback';
+    case 'yearreview':
+      return '#/resumen-del-ano';
   }
 }
 
@@ -37,6 +42,7 @@ function hashToView(hash: string): View {
   if (parts[0] === 'team' && parts[1]) return { name: 'team', team: decodeURIComponent(parts[1]) };
   if (parts[0] === 'person' && parts[1]) return { name: 'person', email: decodeURIComponent(parts[1]) };
   if (parts[0] === 'feedback') return { name: 'feedback' };
+  if (parts[0] === 'resumen-del-ano') return { name: 'yearreview' };
   return { name: 'overview' };
 }
 
@@ -72,6 +78,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  // Mientras el Resumen del año esté "en reflector" (las primeras semanas tras su lanzamiento,
+  // o durante la vista previa de Angie), aparece solo al entrar o al cambiar de perfil con
+  // "Ver como" — sin pisar un enlace directo a otra vista.
+  useEffect(() => {
+    if (!me?.yearReview) return;
+    if (!(me.yearReview.canSeeLeader || me.yearReview.canSeeRh)) return;
+    if (!me.yearReview.spotlight) return;
+    if (window.location.hash) return;
+    navigate({ name: 'yearreview' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.email]);
+
   const navigate = (next: View) => {
     const hash = viewToHash(next);
     if (window.location.hash === hash) {
@@ -91,6 +109,7 @@ export default function App() {
 
   if (loading) return null;
   if (!me) return <Login initialError={authError} />;
+  if (me.pulsoPaused) return <PulsoPause me={me} />;
 
   return (
     <Shell me={me} view={view.name} onNavigate={name => navigate({ name } as View)}>
@@ -116,6 +135,9 @@ export default function App() {
         <PersonDetail me={me} onSetViewAs={setViewAs} email={view.email} onBack={() => navigate({ name: 'overview' })} />
       )}
       {view.name === 'feedback' && me.canSeeFeedback && <FeedbackInbox me={me} />}
+      {view.name === 'yearreview' && (
+        <YearReview me={me} onSetViewAs={setViewAs} onBack={() => navigate({ name: 'overview' })} onOpenPerson={email => navigate({ name: 'person', email })} />
+      )}
     </Shell>
   );
 }
