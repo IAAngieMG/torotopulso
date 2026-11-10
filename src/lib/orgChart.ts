@@ -163,7 +163,12 @@ export const ORG_TEAMS: OrgTeam[] = [
   {
     name: 'Coordinación Territorial de Carbono_Mauro',
     leader: m('Mauro Francisco Cruz Lorenso', 'mauro@toroto.mx'),
-    members: [m('Christian Gerardo Leon Moo', 'christian@toroto.mx')],
+    members: [
+      m('Christian Gerardo Leon Moo', 'christian@toroto.mx'),
+      m('Liliana Chan', 'liliana@toroto.mx'),
+      m('Melinna Aké', 'melinna@toroto.mx'),
+      m('Vannesa Catzim', null),
+    ],
   },
   {
     name: 'Gerencia de Restauración Territorial',
