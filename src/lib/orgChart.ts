@@ -167,7 +167,7 @@ export const ORG_TEAMS: OrgTeam[] = [
       m('Christian Gerardo Leon Moo', 'christian@toroto.mx'),
       m('Liliana Chan', 'liliana@toroto.mx'),
       m('Melinna Aké', 'melinna@toroto.mx'),
-      m('Vannesa Catzim', null),
+      m('Vannesa Catzim', 'lagunaom@toroto.mx'),
     ],
   },
   {
