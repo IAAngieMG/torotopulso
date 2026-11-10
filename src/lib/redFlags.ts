@@ -2,6 +2,7 @@ import type { ResponseRecord } from './pulseData.ts';
 import { rangeWindow } from './scoring.ts';
 import { activeVacation } from './vacations.ts';
 import { isIncidentDate } from './incidents.ts';
+import { isPulsoPausedWindow } from './yearReview.ts';
 
 /**
  * Detección de "red flags" por persona a partir de su propio historial de respuestas — sin IA
@@ -37,6 +38,9 @@ import { isIncidentDate } from './incidents.ts';
  * octubre de 2026 que no se envió por una falla de Google Sheets) tampoco cuenta como "no
  * respondió Cierre del día" aunque la persona sí haya participado ese día en otra encuesta —
  * nadie recibió esa encuesta, así que no hay nada que se haya saltado.
+ *
+ * Mientras la semana evaluada caiga dentro de la pausa general de Pulso por vacaciones de fin de
+ * año (src/lib/yearReview.ts), nadie genera red flags: no se esperan respuestas de nadie.
  *
  * Cada persona con al menos una red flag recibe además una recomendación puntual según el tipo
  * de red flag (no un genérico "busca a la persona"): por ejemplo distingue si dejó de contestar
@@ -120,6 +124,9 @@ function sortFlags(flags: RedFlag[]): RedFlag[] {
 /** Calcula las red flags de una persona sobre la semana pasada, a partir de sus propias respuestas. */
 export function computeRedFlagsForPerson(email: string, records: ResponseRecord[], now = new Date()): RedFlag[] {
   const { start, end } = rangeWindow('lastWeek', now);
+  // Durante la pausa general de Pulso por vacaciones de fin de año (yearReview.ts) nadie recibe
+  // encuestas, así que esa semana no se evalúa para ninguna persona.
+  if (isPulsoPausedWindow(start, end)) return [];
   const recent = records.filter(r => {
     const t = new Date(r.timestamp);
     return !Number.isNaN(t.getTime()) && t >= start && t < end;

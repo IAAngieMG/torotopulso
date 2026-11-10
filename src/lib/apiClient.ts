@@ -51,6 +51,10 @@ export interface Me {
   /** True para las cuentas de Angie y Karla — controla si se muestra el selector "Ver como". */
   canUseViewAs: boolean;
   viewAsOptions: ViewAsOption[];
+  /** True durante la semana de vacaciones de fin de año — la app muestra la pantalla de pausa en vez del dashboard. */
+  pulsoPaused: boolean;
+  /** null mientras el Resumen del año no esté disponible para esta sesión. */
+  yearReview: { preview: boolean; canSeeLeader: boolean; canSeeRh: boolean; spotlight: boolean } | null;
 }
 
 export type RedFlagType = 'silence' | 'late_morning' | 'missing_response' | 'low_score';
@@ -334,6 +338,78 @@ export function createApiToken(label: string) {
 
 export function revokeApiToken(id: string) {
   return api(`/api/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export interface YearMonthlyPoint {
+  month: string;
+  bd: number | null;
+  bt: number | null;
+}
+
+export interface YearAnnualStats {
+  avgScore: number | null;
+  participationPct: number | null;
+  bestMonth: string | null;
+  bestMonthAvg: number | null;
+  totalResponses: number;
+  monthly: YearMonthlyPoint[];
+}
+
+export interface TeamOpportunity {
+  team: string;
+  leader: string;
+  leaderEmail: string;
+  avgScore: number | null;
+  participationPct: number | null;
+  status: 'good' | 'warn';
+  note: string;
+}
+
+export interface PersonOpportunity {
+  email: string;
+  fullName: string;
+  team: string;
+  note: string;
+}
+
+export interface PersonHighlight {
+  email: string;
+  fullName: string;
+  team: string;
+}
+
+export interface Wish {
+  month: string;
+  text: string;
+}
+
+export interface LeaderYearReview {
+  preview: boolean;
+  year: number;
+  name: string;
+  teams: string[];
+  stats: YearAnnualStats;
+  teamOpportunities: TeamOpportunity[];
+  personOpportunities: PersonOpportunity[];
+  personHighlights: PersonHighlight[];
+}
+
+export interface RhYearReview {
+  preview: boolean;
+  year: number;
+  stats: YearAnnualStats;
+  teamsGood: TeamOpportunity[];
+  teamsNeedReview: TeamOpportunity[];
+  leaderOpportunities: { leader: string; leaderEmail: string; team: string; note: string }[];
+  wishes: Wish[];
+}
+
+export function fetchLeaderYearReview() {
+  return api('/api/pulse/year-review') as Promise<LeaderYearReview>;
+}
+
+export function fetchRhYearReview() {
+  return api('/api/pulse/year-review-rh') as Promise<RhYearReview>;
 }
 
 export type NotificationType = 'feedback_new' | 'feedback_reply' | 'survey_pending';

@@ -51,6 +51,17 @@ import {
 } from './src/lib/scoring.ts';
 import { buildNotification, notificationsFor, type NotificationEntry, type NotificationType } from './src/lib/notifications.ts';
 import { sendNotificationEmail } from './src/lib/email.ts';
+import {
+  isPulsoPaused,
+  yearReviewAccess,
+  computeAnnualStats,
+  computeTeamOpportunity,
+  rankPersonOpportunities,
+  buildWishes,
+  groupResponsesByEmail,
+  YEAR_REVIEW_YEAR,
+  YEAR_REVIEW_PREVIEW_EMAILS,
+} from './src/lib/yearReview.ts';
 
 const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
 
@@ -387,6 +398,11 @@ export async function createApp() {
     const access = resolveOrgAccess(effective.email);
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
     const canUseViewAs = VIEW_AS_MANAGER_EMAILS.includes(session.email);
+    const now = new Date();
+    const yr = yearReviewAccess(session.email, effective.email, now);
+    // La pausa general nunca bloquea a quien tiene acceso de vista previa (Angie): sigue
+    // necesitando ver la app con normalidad durante esa semana para revisar el resumen del año.
+    const pulsoPaused = isPulsoPaused(now) && !YEAR_REVIEW_PREVIEW_EMAILS.includes(session.email);
     res.json({
       email: effective.email,
       name: effective.name,
@@ -399,6 +415,8 @@ export async function createApp() {
       isViewingAs: effective.isViewingAs,
       canUseViewAs,
       viewAsOptions: canUseViewAs ? allViewAsTargets([session.email]) : [],
+      pulsoPaused,
+      yearReview: yr.unlocked ? { preview: yr.preview, canSeeLeader: yr.canSeeLeader, canSeeRh: yr.canSeeRh, spotlight: yr.spotlight } : null,
     });
   });
 
@@ -717,6 +735,84 @@ export async function createApp() {
         true,
         incidentNotesForRange(lastWeekStart, lastWeekEnd),
       ),
+    });
+  });
+
+  app.get('/api/pulse/year-review', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
+    const now = new Date();
+    const yr = yearReviewAccess(session.email, effective.email, now);
+    if (!yr.unlocked || !yr.canSeeLeader) {
+      return res.status(403).json({ error: 'El resumen del año todavía no está disponible.' });
+    }
+    const access = resolveOrgAccess(effective.email);
+    if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
+
+    const data = await loadPulseData();
+    const teams = scopedTeamNames(access);
+    const roster = rosterForTeams(teams);
+    const rosterEmails = new Set(roster.map(p => p.email));
+    const byEmail = groupResponsesByEmail(data.responses.filter(r => rosterEmails.has(r.email)));
+
+    const teamOpportunities = teams.map(name => computeTeamOpportunity(teamByName(name)!, byEmail, YEAR_REVIEW_YEAR));
+    const personRoster = rosterForTeams(teams, { excludeEmail: effective.email });
+    const { opportunities, highlights } = rankPersonOpportunities(personRoster, byEmail, YEAR_REVIEW_YEAR);
+    const records = data.responses.filter(r => rosterEmails.has(r.email));
+
+    res.json({
+      preview: yr.preview,
+      year: YEAR_REVIEW_YEAR,
+      name: effective.name,
+      teams,
+      stats: computeAnnualStats(records, rosterEmails.size, YEAR_REVIEW_YEAR),
+      teamOpportunities,
+      personOpportunities: opportunities,
+      personHighlights: highlights,
+    });
+  });
+
+  app.get('/api/pulse/year-review-rh', async (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const effective = effectiveIdentity(req, session);
+    const now = new Date();
+    const yr = yearReviewAccess(session.email, effective.email, now);
+    if (!yr.unlocked || !yr.canSeeRh) {
+      return res.status(403).json({ error: 'El resumen del año todavía no está disponible.' });
+    }
+
+    const data = await loadPulseData();
+    const allTeams = allTeamNames();
+    const roster = rosterForTeams(allTeams);
+    const rosterEmails = new Set(roster.map(p => p.email));
+    const byEmail = groupResponsesByEmail(data.responses.filter(r => rosterEmails.has(r.email)));
+
+    const teamOpportunities = allTeams.map(name => computeTeamOpportunity(teamByName(name)!, byEmail, YEAR_REVIEW_YEAR));
+    const teamsGood = teamOpportunities.filter(t => t.status === 'good').sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0));
+    const teamsNeedReview = teamOpportunities.filter(t => t.status === 'warn').sort((a, b) => (a.avgScore ?? 0) - (b.avgScore ?? 0));
+
+    // Un líder puede encabezar más de un equipo (ej. Luis) — se queda con su equipo de peor
+    // desempeño, y solo aparece si de verdad tiene una oportunidad pendiente.
+    const worstByLeader = new Map<string, (typeof teamOpportunities)[number]>();
+    for (const opp of teamOpportunities) {
+      if (opp.status !== 'warn' || !opp.leaderEmail) continue;
+      const current = worstByLeader.get(opp.leaderEmail);
+      if (!current || (opp.avgScore ?? 0) < (current.avgScore ?? 0)) worstByLeader.set(opp.leaderEmail, opp);
+    }
+    const leaderOpportunities = [...worstByLeader.values()]
+      .sort((a, b) => (a.avgScore ?? 0) - (b.avgScore ?? 0))
+      .map(opp => ({ leader: opp.leader, leaderEmail: opp.leaderEmail, team: opp.team, note: opp.note }));
+
+    const records = data.responses.filter(r => rosterEmails.has(r.email));
+
+    res.json({
+      preview: yr.preview,
+      year: YEAR_REVIEW_YEAR,
+      stats: computeAnnualStats(records, rosterEmails.size, YEAR_REVIEW_YEAR),
+      teamsGood,
+      teamsNeedReview,
+      leaderOpportunities,
+      wishes: buildWishes(teamOpportunities),
     });
   });
 
