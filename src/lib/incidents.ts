@@ -22,6 +22,11 @@ export const TECHNICAL_INCIDENTS: TechnicalIncident[] = [
     qCode: 'BT',
     note: 'El 27/10 el cierre del día no se envió por una falla técnica; no afecta la participación.',
   },
+  {
+    date: '2026-11-11',
+    qCode: 'BD',
+    note: 'El 11/11 el inicio del día solo llegó a unas pocas personas por una falla técnica; no afecta la participación.',
+  },
 ];
 
 function parseDateKey(dateKey: string): Date {
