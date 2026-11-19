@@ -34,17 +34,21 @@ test('buildLeaderBriefRows incluye una fila por cada cuenta con acceso (líderes
   assert.ok(!emails.includes('ana@toroto.mx'), 'quien no tiene acceso al dashboard no debe aparecer');
 });
 
-test('buildLeaderBriefRows calcula el promedio y la participación del equipo de un líder', () => {
+test('buildLeaderBriefRows calcula el promedio y la participación de la semana pasada del equipo de un líder', () => {
+  // Miércoles 11 de noviembre 2026 -> "semana pasada" = lunes 2 a domingo 8 de noviembre.
   const now = new Date('2026-11-11T18:00:00.000Z');
+  const lastWeek = '2026-11-04T18:00:00.000Z';
   const records = [
-    record({ email: 'luis@toroto.mx', qCode: 'BD', rawScore: 4, timestamp: now.toISOString() }),
-    record({ email: 'karen@toroto.mx', qCode: 'BT', rawScore: 4, timestamp: now.toISOString() }),
+    record({ email: 'luis@toroto.mx', qCode: 'BD', rawScore: 4, timestamp: lastWeek }),
+    record({ email: 'karen@toroto.mx', qCode: 'BT', rawScore: 4, timestamp: lastWeek }),
+    // Esta respuesta de la semana en curso no debe contar — el brief mira la semana pasada completa.
+    record({ email: 'luis@toroto.mx', qCode: 'BD', rawScore: 1, timestamp: now.toISOString() }),
   ];
   const rows = buildLeaderBriefRows(records, now);
   const luis = rows.find(r => r.email === 'luis@toroto.mx')!;
   assert.ok(luis);
   assert.equal(luis.team, 'Gerencia de Restauración Territorial');
-  assert.equal(luis.bdAverage, 4);
+  assert.equal(luis.bdAverage, 4, 'solo debe promediar la respuesta de la semana pasada, no la de hoy');
   assert.ok(luis.participationPct !== null);
   assert.equal(typeof luis.redFlagsCount, 'number');
 });
