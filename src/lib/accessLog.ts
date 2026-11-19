@@ -2,7 +2,7 @@ import type { ResponseRecord } from './pulseData.ts';
 import { resolveOrgAccess, scopedTeamNames, allViewAsTargets } from './orgPermissions.ts';
 import { rosterEmailsForTeam, rosterForTeams, fullNameFor } from './orgChart.ts';
 import { filterVacationingEmails } from './vacations.ts';
-import { computeKpis } from './scoring.ts';
+import { computeKpis, inRange } from './scoring.ts';
 import { computeRedFlagsForRoster } from './redFlags.ts';
 
 /**
@@ -57,10 +57,12 @@ export function sendLeaderBriefRows(rows: LeaderBriefRow[]): Promise<void> {
 
 /**
  * Un renglón por cada cuenta con acceso al dashboard (todo líder, más visión global y acceso
- * restringido — la misma lista que alimenta "Ver como"): su pulso de la semana en curso y cuántas
- * red flags tiene activas ahora mismo. Pensado para correr una vez al día (ver
- * `netlify/functions/leader-brief-snapshot.ts`) y así tener en el Sheet lo mismo que cualquier
- * líder vería en su dashboard (o jalaría por el conector MCP), sin que tengan que entrar.
+ * restringido — la misma lista que alimenta "Ver como"): su pulso de la semana pasada (completa,
+ * no la semana en curso a medias) y cuántas red flags tiene activas ahora mismo — mismo período
+ * que usa `computeRedFlagsForRoster`, para que ambos números describan la misma ventana. Pensado
+ * para correr una vez al día (ver `netlify/functions/leader-brief-snapshot.ts`) y así tener en el
+ * Sheet lo mismo que cualquier líder vería en su dashboard (o jalaría por el conector MCP), sin
+ * que tengan que entrar.
  */
 export function buildLeaderBriefRows(allRecords: ResponseRecord[], now: Date = new Date()): LeaderBriefRow[] {
   const at = now.toISOString();
@@ -75,7 +77,7 @@ export function buildLeaderBriefRows(allRecords: ResponseRecord[], now: Date = n
     for (const team of teams) for (const email of rosterEmailsForTeam(team)) rosterEmails.add(email);
     const liveRosterEmails = new Set(filterVacationingEmails(rosterEmails, 'ALL', now));
 
-    const records = allRecords.filter(r => liveRosterEmails.has(r.email));
+    const records = allRecords.filter(r => liveRosterEmails.has(r.email) && inRange(r, { range: 'lastWeek', now }));
     const kpis = computeKpis(records, liveRosterEmails.size);
 
     const roster = rosterForTeams(teams);
