@@ -435,3 +435,8 @@ export function markNotificationRead(id: string) {
 export function markAllNotificationsRead() {
   return api('/api/notifications/read-all', { method: 'POST' });
 }
+
+/** Registra qué vista se acaba de abrir, para el monitoreo de accesos en Sheets — nunca debe romper la navegación. */
+export function logAccessView(view: string) {
+  api('/api/access-log', { method: 'POST', body: JSON.stringify({ view }) }).catch(() => {});
+}
