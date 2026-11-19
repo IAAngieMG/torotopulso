@@ -66,8 +66,12 @@ test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () =
 });
 
 test('quien no tiene periodo registrado nunca se excluye', () => {
-  assert.equal(activeVacation('karen@toroto.mx'), null);
-  assert.equal(isExcludedFromSignal('karen@toroto.mx', 'VIERNES'), false);
+  // Fecha fija (no "ahora"): karen@toroto.mx sí tiene un período "En off" registrado más adelante
+  // (ver VACATIONS), así que esta prueba usa a alguien sin ningún período y una fecha explícita,
+  // para no quedar atada a si hoy cae o no dentro de un período que se agregue después.
+  const now = new Date('2026-09-20T15:00:00.000Z');
+  assert.equal(activeVacation('juan@toroto.mx', now), null);
+  assert.equal(isExcludedFromSignal('juan@toroto.mx', 'VIERNES', now), false);
 });
 
 test('filterVacationingEmails quita solo a quien corresponde según el signal y la fecha', () => {

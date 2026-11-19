@@ -62,6 +62,7 @@ import {
   YEAR_REVIEW_YEAR,
   YEAR_REVIEW_PREVIEW_EMAILS,
 } from './src/lib/yearReview.ts';
+import { logAccessEvent } from './src/lib/accessLog.ts';
 
 const clean = (v: unknown, n = 5000) => String(v ?? '').trim().slice(0, n);
 
@@ -384,6 +385,7 @@ export async function createApp() {
 
       const displayName = firstNameFor(email) || name.split(' ')[0] || email.split('@')[0];
       const session: SignedSession = { email, name: displayName, expiresAt: Date.now() + 8 * 3600000 };
+      logAccessEvent({ type: 'login', email, name: displayName });
       res.json({ sessionToken: createSessionToken(session) });
     } catch (error: any) {
       res.status(502).json({ error: error.message || 'No fue posible validar la sesión con Google.' });
@@ -418,6 +420,16 @@ export async function createApp() {
       pulsoPaused,
       yearReview: yr.unlocked ? { preview: yr.preview, canSeeLeader: yr.canSeeLeader, canSeeRh: yr.canSeeRh, spotlight: yr.spotlight } : null,
     });
+  });
+
+  // El front llama esto una vez por navegación (ver App.tsx) para que el monitoreo de accesos
+  // (src/lib/accessLog.ts) registre qué vista abrió cada quien — siempre sobre la sesión real,
+  // nunca sobre el perfil simulado con "Ver como".
+  app.post('/api/access-log', (req, res) => {
+    const session = (req as any).session as SignedSession;
+    const view = clean(req.body?.view, 200);
+    if (view) logAccessEvent({ type: 'view', email: session.email, name: session.name, view });
+    res.json({ ok: true });
   });
 
   // Autoservicio para conectar herramientas externas (ej. un asistente personal) a los propios

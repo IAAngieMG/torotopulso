@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, setViewAsEmail, TOKEN_KEY, type Me } from './lib/apiClient.ts';
+import { api, setViewAsEmail, logAccessView, TOKEN_KEY, type Me } from './lib/apiClient.ts';
 import Login from './components/Login.tsx';
 import Shell from './components/Shell.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -34,6 +34,21 @@ function viewToHash(view: View): string {
       return '#/feedback';
     case 'yearreview':
       return '#/resumen-del-ano';
+  }
+}
+
+function describeView(view: View): string {
+  switch (view.name) {
+    case 'overview':
+      return 'General';
+    case 'team':
+      return `Equipo: ${view.team}`;
+    case 'person':
+      return `Persona: ${view.email}`;
+    case 'feedback':
+      return 'Feedback recibido';
+    case 'yearreview':
+      return 'Resumen del año';
   }
 }
 
@@ -89,6 +104,15 @@ export default function App() {
     navigate({ name: 'yearreview' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.email]);
+
+  // Monitoreo de accesos (src/lib/accessLog.ts): registra qué vista se abrió en cada navegación,
+  // incluido entrar/salir de "Ver como" (que siempre redirige a 'overview'). Nunca sobre la
+  // pantalla de pausa ni mientras no hay sesión — ahí no hay nada que registrar.
+  useEffect(() => {
+    if (!me || me.pulsoPaused) return;
+    logAccessView(describeView(view));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewToHash(view), me?.email]);
 
   const navigate = (next: View) => {
     const hash = viewToHash(next);
