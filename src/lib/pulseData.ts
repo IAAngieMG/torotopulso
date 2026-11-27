@@ -84,14 +84,36 @@ const DAILY_SLOTS = ['BD', 'AL', 'BT', 'BUK-E'];
 export const ANIV7_QCODE = 'ANIV7';
 
 /**
+ * Encuesta especial "Cierre de año": sustituye la encuesta rotativa de Viernes (Q1-Q4) en los
+ * tres viernes de diciembre de 2026 — una pregunta por viernes (CA1 el 4, CA2 el 11, CA3 el 18),
+ * escala 1-5, sobre el año que termina. Va aparte de Q1-Q4 (no se mezclan) y de los cálculos
+ * normales de ánimo diario, así que — igual que ANIV7 — se excluye de `isFridaySignal` (ver
+ * `src/lib/cierreDeAno.ts` para su agregación propia).
+ */
+export const CIERRE_DE_ANO_QCODES = ['CA1', 'CA2', 'CA3'];
+
+/**
+ * El martes 22 de diciembre de 2026, último día de Pulso del año, "Cierre del día" (BT) se
+ * sustituye por esta pregunta de cómo va a celebrar cada quien las fiestas (opciones fijas, no
+ * una escala de ánimo: nunca se promedia). Igual que ANIV7/CA1-3, se excluye de `isFridaySignal`
+ * y de los cálculos normales (ver `src/lib/cierreDeAno.ts` y `src/lib/yearEndSchedule.ts`).
+ */
+export const FIESTAS_QCODE = 'FIESTAS';
+
+/**
  * `Respuestas.qCode` no usa un código "VIERNES" literal para la encuesta larga del viernes:
  * usa códigos de pregunta rotativos (Q1..Q4, uno por semana, según cuál de las 4 preguntas del
- * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT/BUK-E/ANIV7 es, por eliminación, una
- * respuesta de la encuesta de Viernes.
+ * pool tocó esa semana). Cualquier qCode que no sea BD/AL/BT/BUK-E/ANIV7/CA1-3/FIESTAS es, por
+ * eliminación, una respuesta de la encuesta de Viernes.
  */
 export function isFridaySignal(qCode: string): boolean {
   const upper = qCode.toUpperCase();
-  return upper !== ANIV7_QCODE && !DAILY_SLOTS.includes(upper);
+  return (
+    upper !== ANIV7_QCODE &&
+    upper !== FIESTAS_QCODE &&
+    !CIERRE_DE_ANO_QCODES.includes(upper) &&
+    !DAILY_SLOTS.includes(upper)
+  );
 }
 
 const MES_ES = [

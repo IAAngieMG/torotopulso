@@ -58,3 +58,37 @@ test('una cuenta sin equipos en su alcance arma el brief sin reventar', () => {
   const md = buildPulsoBrief({ access: emptyAccess, email: 'nadie@toroto.mx', allRecords: [], range: 'month', now: NOW });
   assert.ok(md.includes('Sin equipos en el alcance de esta cuenta.'));
 });
+
+test('el brief agrega la sección "Cierre de año" (aparte, nunca mezclada) cuando hay respuestas de CA1-3/Fiestas en el rango', () => {
+  const decemberNow = new Date('2026-12-05T15:00:00.000Z');
+  const md = buildPulsoBrief({
+    access: scopedAccess,
+    email: 'santiago@toroto.mx',
+    allRecords: [
+      record({ qCode: 'CA1', rawScore: 4, email: 'santiago@toroto.mx', timestamp: '2026-12-04T15:00:00.000Z' }),
+      record({ qCode: 'FIESTAS', rawScore: null, choice: 1, email: 'santiago@toroto.mx', timestamp: '2026-12-04T15:00:00.000Z' }),
+    ],
+    range: 'month',
+    now: decemberNow,
+  });
+  assert.ok(md.includes('## Cierre de año'));
+  assert.ok(md.includes('¿Cómo calificarías tu año en Toroto?'));
+  assert.ok(md.includes('### Cómo van a celebrar las fiestas'));
+  assert.ok(md.includes('En casa con la familia: 100%'));
+});
+
+test('el brief NO agrega "Cierre de año" cuando el rango no tiene ninguna respuesta de CA1-3/Fiestas', () => {
+  const md = buildPulsoBrief({ access: scopedAccess, email: 'santiago@toroto.mx', allRecords: [record({})], range: 'week', now: NOW });
+  assert.ok(!md.includes('## Cierre de año'));
+});
+
+test('el brief menciona la pausa de fin de año en una línea cuando el rango la toca', () => {
+  const md = buildPulsoBrief({
+    access: scopedAccess,
+    email: 'santiago@toroto.mx',
+    allRecords: [],
+    range: 'week',
+    now: new Date('2026-12-28T15:00:00.000Z'),
+  });
+  assert.ok(md.toLowerCase().includes('pausa'));
+});

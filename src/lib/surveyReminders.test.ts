@@ -65,6 +65,39 @@ test('quien está de vacaciones (scope "all") no aparece como pendiente ningún 
   assert.deepEqual(missing, []);
 });
 
+test('el tercer viernes del mes no requiere VIERNES (normalmente no hay encuesta ese día)', () => {
+  // 2026-11-20 es el tercer viernes de noviembre.
+  const roster = [{ email: 'a@toroto.mx' }];
+  const missing = missingSurveysToday([], roster, new Date('2026-11-20T18:00:00.000Z'));
+  assert.deepEqual(missing.map(m => m.qCode).sort(), ['AL', 'BD', 'BT']);
+});
+
+test('el 16 de noviembre de 2026 (feriado) no requiere nada de nadie', () => {
+  const roster = [{ email: 'a@toroto.mx' }, { email: 'b@toroto.mx' }];
+  const missing = missingSurveysToday([], roster, new Date('2026-11-16T18:00:00.000Z'));
+  assert.deepEqual(missing, []);
+});
+
+test('durante la pausa de fin de año no se requiere nada de nadie', () => {
+  const roster = [{ email: 'a@toroto.mx' }];
+  const missing = missingSurveysToday([], roster, new Date('2026-12-25T18:00:00.000Z'));
+  assert.deepEqual(missing, []);
+});
+
+test('el 18 de diciembre de 2026 (tercer viernes con excepción), CA3 satisface VIERNES', () => {
+  const roster = [{ email: 'a@toroto.mx' }];
+  const responses = [response({ qCode: 'CA3', timestamp: '2026-12-18T18:00:00.000Z' })];
+  const missing = missingSurveysToday(responses, roster, new Date('2026-12-18T18:00:00.000Z'));
+  assert.deepEqual(missing.map(m => m.qCode).sort(), ['AL', 'BD', 'BT'], 'CA3 satisface VIERNES, pero BD/AL/BT siguen pendientes');
+});
+
+test('el 22 de diciembre de 2026, Fiestas satisface el slot de "Cierre del día" (BT)', () => {
+  const roster = [{ email: 'a@toroto.mx' }];
+  const responses = [response({ qCode: 'FIESTAS', timestamp: '2026-12-22T18:00:00.000Z' })];
+  const missing = missingSurveysToday(responses, roster, new Date('2026-12-22T18:00:00.000Z'));
+  assert.deepEqual(missing.map(m => m.qCode).sort(), ['AL', 'BD']);
+});
+
 test('un correo repetido en el roster (ej. líder de dos equipos) no duplica la notificación', () => {
   const roster = [{ email: 'a@toroto.mx' }, { email: 'A@toroto.mx' }];
   const missing = missingSurveysToday([], roster, WEDNESDAY);

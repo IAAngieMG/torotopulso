@@ -29,6 +29,16 @@ function record(overrides: Partial<ResponseRecord>): ResponseRecord {
   };
 }
 
+test('el feriado del 16 de noviembre de 2026 no cuenta como silencio ni como día hábil esperado', () => {
+  // Lunes 23 de noviembre 2026 -> "semana pasada" = lunes 16 (feriado) a viernes 20 de noviembre.
+  const now = new Date('2026-11-23T15:00:00.000Z');
+  // Solo respondió el viernes 20: sin la exclusión del feriado, el 16 contaría como un 4º día de
+  // silencio (16,17,18,19) sobre 5 días hábiles -> dispararía la flag (4 > 3). Con la exclusión,
+  // son 3 días de silencio real (17,18,19) sobre 4 días hábiles -> no dispara (3 no es > 3).
+  const flags = computeRedFlagsForPerson(EMAIL, [record({ timestamp: '2026-11-20T15:00:00.000Z' })], now);
+  assert.ok(!flags.some(f => f.type === 'silence'), JSON.stringify(flags));
+});
+
 test('sin respuestas en la semana pasada solo genera la red flag de silencio, no las demás', () => {
   const flags = computeRedFlagsForPerson(EMAIL, [], NOW);
   assert.ok(flags.every(f => f.type === 'silence'), JSON.stringify(flags));

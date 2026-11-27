@@ -37,6 +37,7 @@ import {
 import { computeRedFlagsForPerson, computeRedFlagsForRoster, computeVacationStatusForRoster } from './src/lib/redFlags.ts';
 import { activeVacation, vacationLabel, filterVacationingEmails } from './src/lib/vacations.ts';
 import { incidentNotesForRange } from './src/lib/incidents.ts';
+import { pulsoPauseNoteForRange } from './src/lib/yearReview.ts';
 import { pollyHistoryFor } from './src/lib/pollyHistory.ts';
 import {
   computeKpis,
@@ -523,7 +524,7 @@ export async function createApp() {
         requestedTeam || (access.dataScope === 'all' ? 'toda la tropa' : 'tus equipos'),
         records,
         false,
-        incidentNotesForRange(rangeStart, rangeEnd),
+        [...incidentNotesForRange(rangeStart, rangeEnd), ...pulsoPauseNoteForRange(rangeStart, rangeEnd)],
       ),
       questions: {
         BD: currentQuestionFor(data.preguntas, 'BD'),
@@ -745,7 +746,7 @@ export async function createApp() {
         fullNameFor(targetEmail),
         lastWeekRecords,
         true,
-        incidentNotesForRange(lastWeekStart, lastWeekEnd),
+        [...incidentNotesForRange(lastWeekStart, lastWeekEnd), ...pulsoPauseNoteForRange(lastWeekStart, lastWeekEnd)],
       ),
     });
   });

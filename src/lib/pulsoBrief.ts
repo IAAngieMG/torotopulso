@@ -6,6 +6,8 @@ import { computeRedFlagsForRoster, computeVacationStatusForRoster } from './redF
 import { filterVacationingEmails } from './vacations.ts';
 import { applySignalFilter, buildAutoInsight, computeKpis, computeWeeklySeries, inRange, rangeWindow, type OverviewKpis } from './scoring.ts';
 import { incidentNotesForRange } from './incidents.ts';
+import { pulsoPauseNoteForRange } from './yearReview.ts';
+import { computeCierreDeAnoStats, computeFiestasBreakdown } from './cierreDeAno.ts';
 
 /** Periodos que el brief de Pulso expone hacia afuera (ej. el conector MCP) — subconjunto de RangeOption sin 'realtime'/'lastWeek', que son solo para la UI. */
 export type BriefRange = 'week' | 'month' | 'quarter' | 'semester' | 'year';
@@ -50,7 +52,8 @@ export function buildPulsoBrief({ access, email, allRecords, range, now = new Da
   const weeklySeries = computeWeeklySeries(records, now, range);
   const scopeLabel = access.dataScope === 'all' ? 'toda la tropa' : teamsInScope.join(', ') || 'tu equipo';
   const { start: rangeStart, end: rangeEnd } = rangeWindow(range, now);
-  const insight = buildAutoInsight(kpis, weeklySeries, scopeLabel, records, false, incidentNotesForRange(rangeStart, rangeEnd));
+  const technicalNotes = [...incidentNotesForRange(rangeStart, rangeEnd), ...pulsoPauseNoteForRange(rangeStart, rangeEnd)];
+  const insight = buildAutoInsight(kpis, weeklySeries, scopeLabel, records, false, technicalNotes);
 
   const teamLines = teamsInScope.map(teamName => {
     const team = teamByName(teamName);
@@ -87,6 +90,22 @@ export function buildPulsoBrief({ access, email, allRecords, range, now = new Da
     '## Alertas',
     alertLines.length ? alertLines.join('\n') : '_Sin alertas activas._',
   ];
+
+  // "Cierre de año" (CA1-3) y "Fiestas" van siempre en su propia sección, nunca mezcladas con
+  // Q1-Q4 ni con los KPIs de ánimo diario (ver pulseData.ts/cierreDeAno.ts) — solo aparece si hay
+  // al menos una respuesta real de diciembre de 2026 en el rango consultado.
+  const cierreDeAno = computeCierreDeAnoStats(records);
+  if (cierreDeAno.some(c => c.totalResponses > 0)) {
+    sections.push(
+      '',
+      '## Cierre de año',
+      ...cierreDeAno.map(c => `- **${c.label}**: ${c.average !== null ? `${c.average.toFixed(1)}/5` : 'sin respuestas'} (${c.totalResponses} respuestas)`),
+    );
+    const fiestas = computeFiestasBreakdown(records);
+    if (fiestas.some(f => f.count > 0)) {
+      sections.push('', '### Cómo van a celebrar las fiestas', ...fiestas.map(f => `- ${f.label}: ${f.pct}%`));
+    }
+  }
 
   if (vacationLines.length) {
     sections.push('', '## Vacaciones', vacationLines.join('\n'));
