@@ -1,7 +1,7 @@
 import { Snowflake, LogOut, Sparkles } from 'lucide-react';
 import { TOKEN_KEY, type Me } from '../lib/apiClient.ts';
 
-/** Pantalla completa durante la pausa general de Pulso por vacaciones de fin de año (28 dic – 3 ene). */
+/** Pantalla completa durante la pausa general de Pulso por vacaciones de fin de año (23 dic – 3 ene). */
 export default function PulsoPause({ me }: { me: Me }) {
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
@@ -19,11 +19,11 @@ export default function PulsoPause({ me }: { me: Me }) {
           <h1 className="font-display text-2xl font-semibold">Feliz cierre de año, {me.name}.</h1>
         </div>
         <p className="text-sm text-white/70">
-          Del 28 de diciembre al 3 de enero no se piden respuestas ni se generan red flags — descansa sin pendientes.
+          Del 23 de diciembre al 3 de enero no se piden respuestas ni se generan red flags — descansa sin pendientes.
         </p>
         <div className="flex items-center justify-center gap-2 text-sm text-white/80 bg-white/10 rounded-full px-4 py-2 mx-auto w-fit">
           <Sparkles size={14} />
-          Volvemos el lunes 4 de enero con tu Resumen del año
+          Volvemos el lunes 4 de enero — tu Resumen del año te sigue esperando
         </div>
         <button onClick={logout} className="flex items-center gap-2 text-xs text-white/50 hover:text-white mx-auto mt-6">
           <LogOut size={13} /> Cerrar sesión
