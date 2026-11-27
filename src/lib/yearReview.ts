@@ -6,29 +6,30 @@ import { isSlotSwappedAway } from './yearEndSchedule.ts';
 /**
  * Pausa general de Pulso por vacaciones de fin de año, y lanzamiento del "Resumen del año": el
  * martes 22 de diciembre es el último día de Pulso del año; del 23 de diciembre al 3 de enero
- * nadie recibe encuestas ni genera red flags; el 4 de enero se reanuda normal.
- *
- * El "Resumen del año" (este informe anual) se abre a cada líder/RH el 4 de **diciembre**
- * (`YEAR_REVIEW_LIVE_FROM`), no hasta enero: coincide con el primer viernes de "Cierre de año"
- * (CA1, ver `cierreDeAno.ts`), así que cada quien lo ve según su propia vista (líder/RH/visión
- * global) semanas antes de la pausa, no de golpe hasta que termina el año. Sigue disponible
- * normal durante y después de la pausa para quien ya lo tenía desbloqueado.
+ * nadie recibe encuestas ni genera red flags; el 4 de enero se reanuda normal y, ese mismo día,
+ * cada líder (y RH) ve su resumen del año recién cerrado (`YEAR_REVIEW_LIVE_FROM`).
  *
  * `YEAR_REVIEW_PREVIEW_EMAILS` (Angie) entra en vista previa desde `YEAR_REVIEW_PREVIEW_FROM`
- * —ya en el pasado a propósito, para que quede activa de inmediato, antes del 4 de diciembre—
- * y puede probar cómo se verá el resumen para cualquier perfil usando "Ver como": el acceso de
- * vista previa se decide sobre quién está realmente detrás de la sesión (no sobre el perfil que
- * esté simulando), así Angie no queda bloqueada por la pausa ni por el candado de fecha mientras
- * revisa cómo lo verá cada persona.
+ * —ya en el pasado a propósito, para que quede activa de inmediato, semanas antes de que se abra
+ * a los demás— y puede probar cómo se verá el resumen para cualquier perfil usando "Ver como": el
+ * acceso de vista previa se decide sobre quién está realmente detrás de la sesión (no sobre el
+ * perfil que esté simulando), así Angie no queda bloqueada por la pausa ni por el candado de
+ * fecha mientras revisa cómo lo verá cada persona.
  */
 export const YEAR_REVIEW_YEAR = 2026;
 export const PULSO_PAUSE_START = '2026-12-23';
 export const PULSO_PAUSE_END = '2027-01-03';
-export const YEAR_REVIEW_LIVE_FROM = '2026-12-04';
+export const YEAR_REVIEW_LIVE_FROM = '2027-01-04';
 export const YEAR_REVIEW_PREVIEW_FROM = '2026-11-01';
 export const YEAR_REVIEW_SPOTLIGHT_UNTIL = '2027-01-31';
 export const YEAR_REVIEW_PREVIEW_EMAILS = ['ti@toroto.mx'];
-export const YEAR_REVIEW_RH_EMAILS = ['patricia@toroto.mx', 'karla@toroto.mx', 'samantha@toroto.mx'];
+/**
+ * `ti@toroto.mx` (Angie) está aquí para que, aun con vista previa activa, su PROPIO perfil (sin
+ * necesidad de "Ver como") tenga la sección del menú lateral y pueda probar la vista de "toda la
+ * tropa" ella misma — no porque sea RH operativo. Nunca se muestra como lista en la UI (ver
+ * `canSeeRh`), así que no hay riesgo de que alguien la vea etiquetada como RH.
+ */
+export const YEAR_REVIEW_RH_EMAILS = ['patricia@toroto.mx', 'karla@toroto.mx', 'samantha@toroto.mx', 'ti@toroto.mx'];
 
 const MEXICO_TZ = 'America/Mexico_City';
 /** Mismo umbral que redFlags.ts: calificación baja es BT y BD (escala 1-5) por debajo de 3/5; AL nunca cuenta (son emojis, no calidad). */

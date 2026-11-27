@@ -101,24 +101,24 @@ test('computePersonAnnualFlags no cuenta "Cierre del día" como pendiente el 22 
   assert.equal(flags.missingCount, 0, 'no debe contar BT como pendiente el 22/12, lo sustituyó Fiestas');
 });
 
-test('yearReviewAccess: antes del 4 de diciembre, solo Angie entra (vista previa) y nadie más', () => {
-  const now = new Date('2026-11-28T12:00:00.000Z');
-  assert.equal(yearReviewAccess('ti@toroto.mx', 'ti@toroto.mx', now).unlocked, true, 'la vista previa de Angie ya está activa desde el 1 de noviembre');
-  assert.equal(yearReviewAccess('luis@toroto.mx', 'luis@toroto.mx', now).unlocked, false);
+test('yearReviewAccess: antes del 4 de enero, solo Angie entra (vista previa) y nadie más', () => {
+  const now = new Date('2026-12-15T12:00:00.000Z');
+  assert.equal(yearReviewAccess('ti@toroto.mx', 'ti@toroto.mx', now).unlocked, true, 'la vista previa de Angie ya está activa desde el 1 de noviembre, para ir probando en diciembre');
+  assert.equal(yearReviewAccess('luis@toroto.mx', 'luis@toroto.mx', now).unlocked, false, 'los líderes no entran hasta el 4 de enero, no en diciembre');
 });
 
-test('yearReviewAccess: a partir del 4 de diciembre (coincide con el primer viernes de Cierre de año) ya no es vista previa para nadie', () => {
-  const now = new Date('2026-12-04T12:00:00.000Z');
+test('yearReviewAccess: a partir del 4 de enero ya no es vista previa para nadie', () => {
+  const now = new Date('2027-01-04T12:00:00.000Z');
   const angie = yearReviewAccess('ti@toroto.mx', 'ti@toroto.mx', now);
   const luis = yearReviewAccess('luis@toroto.mx', 'luis@toroto.mx', now);
   assert.equal(angie.unlocked, true);
-  assert.equal(angie.preview, false, 'desde el 4 de diciembre ya está "live", no es vista previa ni para Angie');
-  assert.equal(luis.unlocked, true, 'los líderes ya entran el 4 de diciembre, no hasta el 4 de enero');
+  assert.equal(angie.preview, false, 'desde el 4 de enero ya está "live", no es vista previa ni para Angie');
+  assert.equal(luis.unlocked, true);
   assert.equal(luis.preview, false);
 });
 
-test('yearReviewAccess: Angie puede ver con "Ver como" el acceso real de la persona simulada, antes del 4 de diciembre', () => {
-  const now = new Date('2026-11-28T12:00:00.000Z');
+test('yearReviewAccess: Angie puede ver con "Ver como" el acceso real de la persona simulada, antes del 4 de enero', () => {
+  const now = new Date('2026-12-15T12:00:00.000Z');
   const access = yearReviewAccess('ti@toroto.mx', 'luis@toroto.mx', now);
   assert.equal(access.unlocked, true, 'el candado de fecha se evalúa sobre quién inició sesión, no sobre a quién simula');
   assert.equal(access.preview, true);
@@ -134,11 +134,20 @@ test('yearReviewAccess: a partir del 4 de enero sigue abierto para todos, sin se
   assert.equal(access.canSeeLeader, true);
 });
 
-test('yearReviewAccess: canSeeRh solo para patricia, karla y samantha', () => {
+test('yearReviewAccess: canSeeRh solo para patricia, karla, samantha y Angie (ti@toroto.mx)', () => {
   const now = new Date('2027-01-04T12:00:00.000Z');
   assert.equal(yearReviewAccess('karla@toroto.mx', 'karla@toroto.mx', now).canSeeRh, true);
   assert.equal(yearReviewAccess('karla@toroto.mx', 'karla@toroto.mx', now).canSeeLeader, false, 'Karla no lidera ningún equipo');
   assert.equal(yearReviewAccess('juan@toroto.mx', 'juan@toroto.mx', now).canSeeRh, false);
+});
+
+test('yearReviewAccess: Angie ve su propio "Resumen del año" (canSeeRh) sin necesitar "Ver como", desde ya (vista previa)', () => {
+  const now = new Date('2026-11-28T12:00:00.000Z');
+  const access = yearReviewAccess('ti@toroto.mx', 'ti@toroto.mx', now);
+  assert.equal(access.unlocked, true);
+  assert.equal(access.preview, true);
+  assert.equal(access.canSeeRh, true, 'así ya tiene su propia sección en el menú lateral, sin simular a nadie');
+  assert.equal(access.canSeeLeader, false, 'Angie no lidera ningún equipo');
 });
 
 test('computeAnnualStats promedia BD/BT del año y calcula el mejor mes', () => {
