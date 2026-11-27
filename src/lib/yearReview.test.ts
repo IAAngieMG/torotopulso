@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   isPulsoPaused,
   isPulsoPausedWindow,
+  pulsoPauseNoteForRange,
   yearReviewAccess,
   computeAnnualStats,
+  computePersonAnnualFlags,
   computeTeamOpportunity,
   rankPersonOpportunities,
   buildWishes,
@@ -35,18 +37,68 @@ function record(overrides: Partial<ResponseRecord>): ResponseRecord {
   };
 }
 
-test('isPulsoPaused solo es true dentro del 28 de diciembre al 3 de enero', () => {
-  assert.equal(isPulsoPaused(new Date('2026-12-27T23:00:00.000Z')), false);
-  assert.equal(isPulsoPaused(new Date('2026-12-28T06:00:00.000Z')), true);
+test('isPulsoPaused solo es true dentro del 23 de diciembre al 3 de enero', () => {
+  assert.equal(isPulsoPaused(new Date('2026-12-22T23:00:00.000Z')), false);
+  assert.equal(isPulsoPaused(new Date('2026-12-23T06:00:00.000Z')), true);
   assert.equal(isPulsoPaused(new Date('2027-01-03T23:00:00.000Z')), true);
   assert.equal(isPulsoPaused(new Date('2027-01-04T06:00:00.000Z')), false);
 });
 
 test('isPulsoPausedWindow detecta traslape con la semana de pausa', () => {
-  const start = new Date(2026, 11, 28);
+  const start = new Date(2026, 11, 23);
   const end = new Date(2027, 0, 4);
   assert.ok(isPulsoPausedWindow(start, end));
-  assert.ok(!isPulsoPausedWindow(new Date(2026, 11, 20), new Date(2026, 11, 27)));
+  assert.ok(!isPulsoPausedWindow(new Date(2026, 11, 15), new Date(2026, 11, 22)));
+});
+
+test('pulsoPauseNoteForRange solo regresa la nota cuando el rango toca la pausa de fin de año', () => {
+  const notes = pulsoPauseNoteForRange(new Date(2026, 11, 20), new Date(2026, 11, 27));
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /pausa/i);
+  assert.equal(pulsoPauseNoteForRange(new Date(2026, 11, 1), new Date(2026, 11, 20)).length, 0);
+});
+
+test('computePersonAnnualFlags no cuenta "Cierre del día" como pendiente el 22 de diciembre de 2026 (sustituido por Fiestas)', () => {
+  const records: ResponseRecord[] = [
+    {
+      timestamp: '2026-12-22T15:00:00.000Z',
+      responseKey: 'k1',
+      surveyName: 'BD',
+      qCode: 'BD',
+      question: 'q',
+      respondentName: 'Persona',
+      email: 'persona@toroto.mx',
+      slackUserId: '',
+      groups: '',
+      roles: '',
+      rawScore: 5,
+      score: 10,
+      sentiment: '',
+      choice: null,
+      scheduledDate: '',
+      scheduledTime: '',
+    },
+    {
+      timestamp: '2026-12-22T20:00:00.000Z',
+      responseKey: 'k2',
+      surveyName: 'Alimentos',
+      qCode: 'AL',
+      question: 'q',
+      respondentName: 'Persona',
+      email: 'persona@toroto.mx',
+      slackUserId: '',
+      groups: '',
+      roles: '',
+      rawScore: null,
+      score: null,
+      sentiment: '',
+      choice: 2,
+      scheduledDate: '',
+      scheduledTime: '',
+    },
+  ];
+  const flags = computePersonAnnualFlags('persona@toroto.mx', 'Persona', 'Equipo', records, 2026);
+  assert.equal(flags.missingCount, 0, 'no debe contar BT como pendiente el 22/12, lo sustituyó Fiestas');
 });
 
 test('yearReviewAccess está cerrado para cualquiera antes del 27 de diciembre', () => {

@@ -1,6 +1,8 @@
 import type { ResponseRecord } from './pulseData.ts';
-import { isFridaySignal } from './pulseData.ts';
+import { CIERRE_DE_ANO_QCODES, FIESTAS_QCODE, isFridaySignal } from './pulseData.ts';
 import { isExcludedFromSignal } from './vacations.ts';
+import { isPulsoPaused } from './yearReview.ts';
+import { isHolidayNoSurveyDate, isSkippedViernesDate } from './yearEndSchedule.ts';
 
 export type DailySignal = 'BD' | 'AL' | 'BT' | 'VIERNES';
 
@@ -29,17 +31,35 @@ function isFridayLocal(d: Date, tz = MEXICO_TZ): boolean {
  * contestó": asume que para la hora en que corre este chequeo (ver `survey-reminders.ts`, pensado
  * para correr una vez al día cerca del final de la jornada) ya debió haber contestado todo lo de
  * hoy. Si Angie prefiere otra hora, se ajusta el cron de esa función, no esta lógica.
+ *
+ * Durante la pausa general de fin de año y en feriados puntuales no se espera nada de nadie (ver
+ * `yearReview.ts`/`yearEndSchedule.ts`); el tercer viernes de cada mes no requiere VIERNES salvo
+ * excepción explícita; y en diciembre de 2026 "Cierre de año" (CA1-3) cuenta como VIERNES y
+ * "Fiestas" (22 dic) cuenta como BT, porque ese día la sustituye.
  */
 export function missingSurveysToday(responses: ResponseRecord[], roster: { email: string }[], now: Date = new Date()): MissingSurvey[] {
   const todayKey = localDateKey(now);
-  const slots: DailySignal[] = isFridayLocal(now) ? ['BD', 'AL', 'BT', 'VIERNES'] : ['BD', 'AL', 'BT'];
+  // Pausa general de fin de año, o un feriado puntual (ver yearReview.ts/yearEndSchedule.ts):
+  // nadie recibe nada hoy, así que no hay nada que recordar.
+  if (isPulsoPaused(now) || isHolidayNoSurveyDate(todayKey)) return [];
+  // El tercer viernes del mes normalmente no tiene encuesta de Viernes (salvo fechas con
+  // excepción explícita, ej. el 18 de diciembre de 2026 — ver yearEndSchedule.ts).
+  const includeViernes = isFridayLocal(now) && !isSkippedViernesDate(todayKey);
+  const slots: DailySignal[] = includeViernes ? ['BD', 'AL', 'BT', 'VIERNES'] : ['BD', 'AL', 'BT'];
 
   const answeredToday = new Set<string>();
   for (const r of responses) {
     if (!r.email || !r.timestamp) continue;
     const ts = new Date(r.timestamp);
     if (Number.isNaN(ts.getTime()) || localDateKey(ts) !== todayKey) continue;
-    const slot: DailySignal = isFridaySignal(r.qCode) ? 'VIERNES' : (r.qCode.toUpperCase() as DailySignal);
+    // "Cierre de año" (CA1-3, los viernes de diciembre) cuenta como la encuesta de Viernes del
+    // día; "Fiestas" (22 de diciembre) cuenta como "Cierre del día" (BT), que ese día sustituye.
+    const slot: DailySignal =
+      CIERRE_DE_ANO_QCODES.includes(r.qCode) || isFridaySignal(r.qCode)
+        ? 'VIERNES'
+        : r.qCode === FIESTAS_QCODE
+          ? 'BT'
+          : (r.qCode.toUpperCase() as DailySignal);
     answeredToday.add(`${r.email.trim().toLowerCase()}|${slot}`);
   }
 

@@ -1,11 +1,13 @@
 import type { ResponseRecord } from './pulseData.ts';
 import type { OrgTeam } from './orgChart.ts';
 import { rosterEmailsForTeam, teamsLedBy } from './orgChart.ts';
+import { isSlotSwappedAway } from './yearEndSchedule.ts';
 
 /**
- * Pausa general de Pulso por vacaciones de fin de año, y lanzamiento del "Resumen del año":
- * del 28 de diciembre al 3 de enero nadie recibe encuestas ni genera red flags; el 4 de enero
- * se reanuda y, además, cada líder (y RH) ve su resumen del año recién cerrado.
+ * Pausa general de Pulso por vacaciones de fin de año, y lanzamiento del "Resumen del año": el
+ * martes 22 de diciembre es el último día de Pulso del año; del 23 de diciembre al 3 de enero
+ * nadie recibe encuestas ni genera red flags; el 4 de enero se reanuda normal y, además, cada
+ * líder (y RH) ve su resumen del año recién cerrado.
  *
  * `YEAR_REVIEW_PREVIEW_EMAILS` puede entrar un día antes (27 de diciembre) a probar cómo se verá
  * el resumen para cualquier perfil usando "Ver como" — el acceso de vista previa se decide sobre
@@ -13,7 +15,7 @@ import { rosterEmailsForTeam, teamsLedBy } from './orgChart.ts';
  * queda bloqueada por la pausa ni por el candado de fecha mientras revisa cómo lo verá cada persona.
  */
 export const YEAR_REVIEW_YEAR = 2026;
-export const PULSO_PAUSE_START = '2026-12-28';
+export const PULSO_PAUSE_START = '2026-12-23';
 export const PULSO_PAUSE_END = '2027-01-03';
 export const YEAR_REVIEW_LIVE_FROM = '2027-01-04';
 export const YEAR_REVIEW_PREVIEW_FROM = '2026-12-27';
@@ -46,6 +48,14 @@ export function isPulsoPaused(at: Date = new Date()): boolean {
 /** True si [start, end) se traslapa con la pausa general — usado por red flags para no evaluar esa semana. */
 export function isPulsoPausedWindow(start: Date, end: Date): boolean {
   return start < endOfDay(PULSO_PAUSE_END) && end > startOfDay(PULSO_PAUSE_START);
+}
+
+/** Nota breve para el resumen (`buildAutoInsight`) cuando el rango analizado toca la pausa general de fin de año. */
+export function pulsoPauseNoteForRange(start: Date, end: Date): string[] {
+  if (!isPulsoPausedWindow(start, end)) return [];
+  return [
+    'Pulso estuvo en pausa por las fiestas de fin de año (del 23 de diciembre al 3 de enero); no se interpreta como baja participación.',
+  ];
 }
 
 export interface YearReviewAccess {
@@ -215,11 +225,13 @@ export function computePersonAnnualFlags(
 
   let lateMorningCount = 0;
   let missingCount = 0;
-  for (const dayRecords of byDate.values()) {
+  for (const [dateKey, dayRecords] of byDate) {
     const bd = dayRecords.find(r => r.qCode === 'BD');
     if (bd && localMinuteOfDay(bd.timestamp) > LATE_CHECKIN_MINUTE_OF_DAY) lateMorningCount++;
     if (!dayRecords.some(r => r.qCode === 'AL')) missingCount++;
-    if (!dayRecords.some(r => r.qCode === 'BT')) missingCount++;
+    // "Cierre del día" (BT) sustituido por otra encuesta a propósito (ver yearEndSchedule.ts, ej.
+    // "Fiestas" el 22 de diciembre de 2026) no cuenta como pendiente: nadie recibió BT ese día.
+    if (!isSlotSwappedAway(dateKey, 'BT') && !dayRecords.some(r => r.qCode === 'BT')) missingCount++;
   }
 
   // AL se responde con emojis, no con calificación de calidad — igual que en redFlags.ts, nunca cuenta aquí.

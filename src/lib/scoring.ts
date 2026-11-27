@@ -1,4 +1,7 @@
-import { isFridaySignal, type ResponseRecord } from './pulseData.ts';
+import { ANIV7_QCODE, CIERRE_DE_ANO_QCODES, FIESTAS_QCODE, isFridaySignal, type ResponseRecord } from './pulseData.ts';
+
+/** Encuestas especiales de un solo uso que nunca entran a `overallAverage`: no son ánimo diario (ANIV7, Cierre de año) o ni siquiera una escala (FIESTAS). */
+const ONE_OFF_SPECIAL_QCODES = [ANIV7_QCODE, FIESTAS_QCODE, ...CIERRE_DE_ANO_QCODES];
 
 const DAY_MS = 86400000;
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -155,8 +158,12 @@ export function computeKpis(records: ResponseRecord[], rosterSize: number): Over
     bdAverage: average(scores(records, 'BD')),
     btAverage: average(scores(records, 'BT')),
     moodAverage: average([...scores(records, 'BD'), ...scores(records, 'BT')]),
+    // "BUK-E" es puntualidad, no calidad; ANIV7/FIESTAS/CA1-3 son encuestas especiales de un solo
+    // uso que nunca deben mezclarse con la calificación general diaria (ver pulseData.ts).
     overallAverage: average(
-      records.filter(r => r.rawScore !== null && r.qCode !== 'BUK-E').map(r => r.rawScore as number),
+      records
+        .filter(r => r.rawScore !== null && r.qCode !== 'BUK-E' && !ONE_OFF_SPECIAL_QCODES.includes(r.qCode))
+        .map(r => r.rawScore as number),
     ),
     participationPct,
     participationDetail: `${respondents.size} de ${rosterSize} personas`,

@@ -3,6 +3,7 @@ import { rangeWindow } from './scoring.ts';
 import { activeVacation } from './vacations.ts';
 import { isIncidentDate } from './incidents.ts';
 import { isPulsoPausedWindow } from './yearReview.ts';
+import { isHolidayNoSurveyDate, isSlotSwappedAway } from './yearEndSchedule.ts';
 
 /**
  * Detección de "red flags" por persona a partir de su propio historial de respuestas — sin IA
@@ -141,7 +142,10 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   // una red flag (ni informativa): ya se muestran aparte junto al nombre de la persona. El resto
   // de la semana sigue las reglas normales.
   const vacationDays = weekdays.filter(k => activeVacation(email, new Date(`${k}T12:00:00`))?.scope === 'all');
-  const workWeekdays = weekdays.filter(k => !vacationDays.includes(k));
+  // Feriados puntuales en los que Pulso no envía nada (ver yearEndSchedule.ts, ej. 16 de
+  // noviembre de 2026) tampoco cuentan como silencio: nadie recibió nada ese día.
+  const holidayDays = weekdays.filter(k => isHolidayNoSurveyDate(k));
+  const workWeekdays = weekdays.filter(k => !vacationDays.includes(k) && !holidayDays.includes(k));
   const silentDays = workWeekdays.filter(k => !datesWithResponse.has(k)).length;
   if (silentDays > PATTERN_DAYS_THRESHOLD) {
     flags.push({
@@ -183,10 +187,12 @@ export function computeRedFlagsForPerson(email: string, records: ResponseRecord[
   }
 
   // Días con una incidencia técnica conocida para "Cierre del día" (ver incidents.ts, ej. el
-  // 27 de octubre de 2026) se excluyen de este patrón: la encuesta no se envió por una falla
-  // ajena al equipo, así que no contestarla ese día no es un "se saltó el slot".
+  // 27 de octubre de 2026), o con "Cierre del día" sustituido por otra encuesta a propósito (ver
+  // yearEndSchedule.ts, ej. "Fiestas" el 22 de diciembre de 2026), se excluyen de este patrón:
+  // no contestar BT ese día no es un "se saltó el slot" porque nadie lo recibió.
   const btMissingDays = activeDateKeys.filter(
-    dateKey => !isIncidentDate(dateKey, 'BT') && !byDate.get(dateKey)!.some(r => r.qCode === 'BT'),
+    dateKey =>
+      !isIncidentDate(dateKey, 'BT') && !isSlotSwappedAway(dateKey, 'BT') && !byDate.get(dateKey)!.some(r => r.qCode === 'BT'),
   );
   if (btMissingDays.length > PATTERN_DAYS_THRESHOLD) {
     flags.push({
@@ -250,7 +256,7 @@ export function buildFlagContext(records: ResponseRecord[], now = new Date()): R
   });
   if (prior.length === 0) return EMPTY_CONTEXT;
 
-  const priorWeekdays = weekdayKeysInRange(priorStart, start);
+  const priorWeekdays = weekdayKeysInRange(priorStart, start).filter(k => !isHolidayNoSurveyDate(k));
   const priorDatesWithResponse = new Set(prior.map(r => localDateKey(r.timestamp)));
   const priorSilentDays = priorWeekdays.filter(k => !priorDatesWithResponse.has(k)).length;
   const wasActiveBeforeSilence = priorWeekdays.length > 0 ? priorSilentDays / priorWeekdays.length <= 0.4 : null;

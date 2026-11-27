@@ -108,6 +108,18 @@ test('bdAverage/moodAverage/overallAverage ignoran BUK-E (recordatorio de check-
   assert.equal(kpis.overallAverage, 4);
 });
 
+test('overallAverage ignora CA1-3 ("Cierre de año") y FIESTAS aunque traigan rawScore poblado, para no mezclarlas con el ánimo diario', () => {
+  const records = [
+    rec({ qCode: 'CA1', rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'CA2', rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'CA3', rawScore: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'FIESTAS', rawScore: 1, choice: 1, email: 'a@toroto.mx' }),
+    rec({ qCode: 'BT', rawScore: 5, email: 'a@toroto.mx' }),
+  ];
+  const kpis = computeKpis(records, 1);
+  assert.equal(kpis.overallAverage, 5, 'CA1-3/FIESTAS no deben jalar el promedio hacia abajo');
+});
+
 test('bdAverage cuenta BD en escala 1-5 normalmente, sin importar que BUK-E (otra encuesta) también haya llegado esa semana', () => {
   const records = [
     rec({ qCode: 'BD', choice: 1, rawScore: 1, email: 'a@toroto.mx' }),

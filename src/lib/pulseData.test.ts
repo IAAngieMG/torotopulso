@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRespuestas, parsePreguntas, currentQuestionFor } from './pulseData.ts';
+import { parseRespuestas, parsePreguntas, currentQuestionFor, isFridaySignal } from './pulseData.ts';
 
 test('parseRespuestas castea scores numéricos y deja email en minúsculas', () => {
   const rows = [
@@ -26,6 +26,20 @@ test('parseRespuestas mantiene "BUK-E" (check-in de entrada en Buk) como su prop
   const parsed = parseRespuestas(rows);
   assert.equal(parsed[0].qCode, 'BUK-E');
   assert.equal(parsed[1].qCode, 'BUK-E', 'el qCode se normaliza a mayúsculas, sin importar cómo venga en el Sheet');
+});
+
+test('isFridaySignal excluye las encuestas especiales de un solo uso (ANIV7, CA1-3, FIESTAS) además de BD/AL/BT/BUK-E', () => {
+  assert.equal(isFridaySignal('BD'), false);
+  assert.equal(isFridaySignal('AL'), false);
+  assert.equal(isFridaySignal('BT'), false);
+  assert.equal(isFridaySignal('BUK-E'), false);
+  assert.equal(isFridaySignal('ANIV7'), false);
+  assert.equal(isFridaySignal('CA1'), false, 'Cierre de año no se mezcla con Q1-Q4');
+  assert.equal(isFridaySignal('ca2'), false, 'insensible a mayúsculas, igual que el resto de qCode');
+  assert.equal(isFridaySignal('CA3'), false);
+  assert.equal(isFridaySignal('FIESTAS'), false);
+  assert.equal(isFridaySignal('Q1'), true, 'Q1-Q4 siguen siendo Viernes por eliminación');
+  assert.equal(isFridaySignal('Q4'), true);
 });
 
 test('currentQuestionFor rota el pool de Viernes y respeta el mes para BD/AL/BT', () => {
