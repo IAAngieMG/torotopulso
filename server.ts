@@ -763,15 +763,20 @@ export async function createApp() {
     if (!access.granted) return res.status(403).json({ error: 'Acceso revocado.' });
 
     const data = await loadPulseData();
+    // El resumen del año se corta a la semana pasada completa, nunca a la semana en curso a
+    // medias: ahora que se ve desde el 4 de diciembre (no hasta que cierra el año), mostrar la
+    // semana de hoy incompleta daría una lectura engañosa de "cómo va" el año.
+    const { end: throughLastWeek } = rangeWindow('lastWeek', now);
+    const responsesThroughLastWeek = data.responses.filter(r => new Date(r.timestamp) < throughLastWeek);
     const teams = scopedTeamNames(access);
     const roster = rosterForTeams(teams);
     const rosterEmails = new Set(roster.map(p => p.email));
-    const byEmail = groupResponsesByEmail(data.responses.filter(r => rosterEmails.has(r.email)));
+    const byEmail = groupResponsesByEmail(responsesThroughLastWeek.filter(r => rosterEmails.has(r.email)));
 
     const teamOpportunities = teams.map(name => computeTeamOpportunity(teamByName(name)!, byEmail, YEAR_REVIEW_YEAR));
     const personRoster = rosterForTeams(teams, { excludeEmail: effective.email });
     const { opportunities, highlights } = rankPersonOpportunities(personRoster, byEmail, YEAR_REVIEW_YEAR);
-    const records = data.responses.filter(r => rosterEmails.has(r.email));
+    const records = responsesThroughLastWeek.filter(r => rosterEmails.has(r.email));
 
     res.json({
       preview: yr.preview,
@@ -795,10 +800,13 @@ export async function createApp() {
     }
 
     const data = await loadPulseData();
+    // Mismo corte a la semana pasada completa que /api/pulse/year-review (ver ahí el por qué).
+    const { end: throughLastWeekRh } = rangeWindow('lastWeek', now);
+    const responsesThroughLastWeekRh = data.responses.filter(r => new Date(r.timestamp) < throughLastWeekRh);
     const allTeams = allTeamNames();
     const roster = rosterForTeams(allTeams);
     const rosterEmails = new Set(roster.map(p => p.email));
-    const byEmail = groupResponsesByEmail(data.responses.filter(r => rosterEmails.has(r.email)));
+    const byEmail = groupResponsesByEmail(responsesThroughLastWeekRh.filter(r => rosterEmails.has(r.email)));
 
     const teamOpportunities = allTeams.map(name => computeTeamOpportunity(teamByName(name)!, byEmail, YEAR_REVIEW_YEAR));
     const teamsGood = teamOpportunities.filter(t => t.status === 'good').sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0));
@@ -816,7 +824,7 @@ export async function createApp() {
       .sort((a, b) => (a.avgScore ?? 0) - (b.avgScore ?? 0))
       .map(opp => ({ leader: opp.leader, leaderEmail: opp.leaderEmail, team: opp.team, note: opp.note }));
 
-    const records = data.responses.filter(r => rosterEmails.has(r.email));
+    const records = responsesThroughLastWeekRh.filter(r => rosterEmails.has(r.email));
 
     res.json({
       preview: yr.preview,
