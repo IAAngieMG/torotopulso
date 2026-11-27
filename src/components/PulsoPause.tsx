@@ -23,7 +23,7 @@ export default function PulsoPause({ me }: { me: Me }) {
         </p>
         <div className="flex items-center justify-center gap-2 text-sm text-white/80 bg-white/10 rounded-full px-4 py-2 mx-auto w-fit">
           <Sparkles size={14} />
-          Volvemos el lunes 4 de enero — tu Resumen del año te sigue esperando
+          Volvemos el lunes 4 de enero con tu Resumen del año
         </div>
         <button onClick={logout} className="flex items-center gap-2 text-xs text-white/50 hover:text-white mx-auto mt-6">
           <LogOut size={13} /> Cerrar sesión

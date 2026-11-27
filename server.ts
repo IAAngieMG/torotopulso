@@ -764,7 +764,7 @@ export async function createApp() {
 
     const data = await loadPulseData();
     // El resumen del año se corta a la semana pasada completa, nunca a la semana en curso a
-    // medias: ahora que se ve desde el 4 de diciembre (no hasta que cierra el año), mostrar la
+    // medias (Angie lo previsualiza en diciembre, antes de que termine el año): mostrar la
     // semana de hoy incompleta daría una lectura engañosa de "cómo va" el año.
     const { end: throughLastWeek } = rangeWindow('lastWeek', now);
     const responsesThroughLastWeek = data.responses.filter(r => new Date(r.timestamp) < throughLastWeek);
