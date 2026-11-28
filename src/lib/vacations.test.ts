@@ -47,12 +47,14 @@ test('isPersonOff es true durante un período "En off" y false fuera de rango', 
   assert.ok(isPersonOff('karla@toroto.mx', new Date('2026-11-11T15:00:00.000Z')));
 });
 
-test('Karla además tiene vacaciones normales del 21 al 31 de diciembre, aparte de su "En off" de noviembre', () => {
+test('Karla además tiene vacaciones normales del 21 de diciembre al 3 de enero, aparte de su "En off" de noviembre', () => {
   assert.equal(isPersonOff('karla@toroto.mx', new Date('2026-11-20T15:00:00.000Z')), false);
   const active = activeVacation('karla@toroto.mx', new Date('2026-12-25T15:00:00.000Z'));
   assert.ok(active);
   assert.equal(active!.reason, 'De vacaciones');
   assert.match(vacationLabel(active!), /vacaciones/i);
+  assert.ok(isPersonOff('karla@toroto.mx', new Date('2027-01-03T15:00:00.000Z')), 'sigue de vacaciones hasta el 3 de enero, no solo hasta el 31 de diciembre');
+  assert.equal(isPersonOff('karla@toroto.mx', new Date('2027-01-04T15:00:00.000Z')), false);
 });
 
 test('Ane está de maternidad (todo signal) hasta el 8 de febrero de 2027', () => {
@@ -85,4 +87,15 @@ test('filterVacationingEmails quita solo a quien corresponde según el signal y 
   const during = new Date('2026-10-15T15:00:00.000Z');
   assert.deepEqual(filterVacationingEmails(emails, 'VIERNES', during), ['emiliano@toroto.mx', 'karen@toroto.mx']);
   assert.deepEqual(filterVacationingEmails(emails, 'BD', during), ['emiliano@toroto.mx', 'karen@toroto.mx']);
+});
+
+test('Angie (ti@toroto.mx) tiene vacaciones el 4 y el 7 de diciembre, y del 22 de diciembre al 3 de enero', () => {
+  assert.ok(isPersonOff('ti@toroto.mx', new Date('2026-12-04T15:00:00.000Z')), 'viernes 4 de diciembre');
+  assert.ok(isPersonOff('ti@toroto.mx', new Date('2026-12-07T15:00:00.000Z')), 'lunes 7 de diciembre (el fin de semana de por medio no importa: nadie espera respuesta sábado/domingo)');
+  assert.equal(isPersonOff('ti@toroto.mx', new Date('2026-12-08T15:00:00.000Z')), false, 'ya de vuelta el 8 de diciembre');
+
+  assert.equal(isPersonOff('ti@toroto.mx', new Date('2026-12-21T15:00:00.000Z')), false, 'todavía no, un día antes de su segundo período');
+  assert.ok(isPersonOff('ti@toroto.mx', new Date('2026-12-22T15:00:00.000Z')), 'último día de Pulso del año, Angie ya está de vacaciones');
+  assert.ok(isPersonOff('ti@toroto.mx', new Date('2027-01-03T15:00:00.000Z')));
+  assert.equal(isPersonOff('ti@toroto.mx', new Date('2027-01-04T15:00:00.000Z')), false, 'de vuelta el 4 de enero, con todos los demás');
 });
